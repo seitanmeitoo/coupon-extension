@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Chasseur de Coupons — vie privée d'abord",
+  "version": "1.0.0",
+  "description": "Trouve et applique vos codes promo automatiquement — architecture à 3 niveaux, respectueuse de la vie privée.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage", "activeTab", "declarativeContent", "scripting"],
+  "host_permissions": ["https://*/*"],
+  "background": {
+    "service_worker": "worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Chasseur de Coupons"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://localhost/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

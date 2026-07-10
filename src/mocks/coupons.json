@@ -1,0 +1,24 @@
+{
+  "localhost": [
+    { "code": "BIENVENUE10", "description": "10 % de réduction pour les nouveaux clients (boutique de démonstration)", "successRate": 0.9 },
+    { "code": "SOLDES2026", "description": "Offre spéciale soldes (boutique de démonstration)", "successRate": 0.4 }
+  ],
+  "shein.com": [
+    { "code": "SHEIN15", "description": "15 % de réduction sur tout le site", "successRate": 0.6 }
+  ],
+  "adidas.com": [
+    { "code": "RAN15", "description": "10 % plein tarif / 7 % sur les soldes", "successRate": 0.5 }
+  ],
+  "amazon.fr": [
+    { "code": "PRIME5", "description": "5 € offerts dès 50 € d'achat (sélection)", "successRate": 0.3 }
+  ],
+  "fnac.com": [
+    { "code": "ADHERENT10", "description": "10 € offerts aux adhérents dès 100 €", "successRate": 0.5 }
+  ],
+  "zalando.fr": [
+    { "code": "ZALANDO10", "description": "10 % de réduction sur la mode", "successRate": 0.45 }
+  ],
+  "asos.com": [
+    { "code": "ASOS20", "description": "20 % étudiants et nouveaux clients", "successRate": 0.55 }
+  ]
+}

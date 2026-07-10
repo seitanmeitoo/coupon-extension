@@ -1,0 +1,31 @@
+{
+  "name": "coupon-extension",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Extension Chrome (Manifest V3) de recherche et d'application automatique de codes promo — architecture hybride à 3 niveaux, respectueuse de la vie privée.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && vite build --config vite.content.config.ts",
+    "test": "vitest run",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.313",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "jsdom": "^25.0.1",
+    "playwright-core": "^1.55.0",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.19",
+    "vitest": "^2.1.9"
+  }
+}
