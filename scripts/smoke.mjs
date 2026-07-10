@@ -152,18 +152,20 @@ try {
     { timeout: 20000 },
   )
   check(true, 'le code tapé manuellement a fait baisser le prix')
-  await manual.waitForFunction(
-    () => document.body.innerText.includes('partagé anonymement'),
-    { timeout: 20000 },
-  )
-  check(true, 'toast « partagé anonymement avec la communauté » affiché')
+  // En mode démonstration (MOCK_CROWDSOURCE), l'UI doit rester HONNÊTE : « simulé »,
+  // pas « partagé », car rien n'a réellement quitté le navigateur.
+  await manual.waitForFunction(() => document.body.innerText.includes('simulé'), { timeout: 20000 })
+  check(true, 'toast « envoi communautaire simulé (mode démonstration) » affiché')
 
   const stored = await popup.evaluate(() => chrome.storage.local.get(['coupons', 'stats']))
   const localhostCoupons = stored.coupons?.localhost ?? []
   const manualCoupon = localhostCoupons.find((c) => c.code === 'MANUEL5')
   check(manualCoupon?.source === 'crowdsourced', 'code MANUEL5 mémorisé avec la source « crowdsourced »')
-  check((stored.stats?.shared ?? 0) >= 1, 'compteur de partages anonymes incrémenté')
   check((stored.stats?.applied ?? 0) >= 2, 'compteur de codes appliqués incrémenté')
+  check(
+    (stored.stats?.shared ?? 0) === 0,
+    'compteur de partages NON incrémenté en mode simulé (honnêteté)',
+  )
 
   /* -------- 5. Régression : nettoyage ne soumet pas le <form> ------- */
   console.log('\n[5/5] Régression : le nettoyage ne soumet jamais le formulaire')

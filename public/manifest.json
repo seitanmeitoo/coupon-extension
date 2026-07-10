@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chasseur de Coupons — vie privée d'abord",
   "version": "1.0.0",
-  "description": "Trouve et applique automatiquement des codes promo grâce à une architecture hybride à 3 niveaux (base open-source, scraping localisé, crowdsourcing anonyme). Aucun identifiant ne quitte votre navigateur.",
+  "description": "Trouve et applique vos codes promo automatiquement — architecture à 3 niveaux, respectueuse de la vie privée.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

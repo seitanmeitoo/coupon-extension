@@ -12,6 +12,13 @@ import type { Coupon } from '../types'
 export interface GetCouponsRequest {
   type: 'GET_COUPONS'
   domain: string
+  /**
+   * `true` uniquement quand un vrai champ coupon a été détecté sur la page
+   * (émis par le content script). Vie privée : le Tier 2 (scraping, qui révèle
+   * le domaine visité à l'annuaire tiers) n'est déclenché que dans ce cas —
+   * le popup interroge sans ce drapeau et ne provoque donc aucun scraping.
+   */
+  couponFieldPresent?: boolean
 }
 
 /**
@@ -40,8 +47,14 @@ export interface GetCouponsResponse {
 }
 
 export interface ReportResultResponse {
-  /** `true` si le code a été transmis anonymement à la communauté (opt-in actif). */
+  /** `true` si le code a été accepté pour partage communautaire (opt-in actif). */
   shared: boolean
+  /**
+   * `true` si l'envoi n'a été que SIMULÉ (mode démonstration, backend non
+   * configuré) : rien n'a réellement quitté le navigateur. Permet à l'UI de
+   * ne pas prétendre à un partage réel.
+   */
+  simulated: boolean
 }
 
 export interface RefreshTier1Response {

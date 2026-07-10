@@ -49,6 +49,13 @@ describe('findCouponInput', () => {
     `
     expect(findCouponInput()).toBeNull()
   })
+
+  it('ne détecte PAS un champ carte cadeau comme champ coupon (vie privée)', () => {
+    document.body.innerHTML = `
+      <input type="text" name="gift-card" placeholder="Carte cadeau" />
+    `
+    expect(findCouponInput()).toBeNull()
+  })
 })
 
 describe('scoreInput', () => {
@@ -101,6 +108,28 @@ describe('findApplyButton', () => {
 
   it('retourne null quand rien ne ressemble à un bouton d’application', () => {
     document.body.innerHTML = `<div><input type="text" name="coupon" /></div>`
+    const input = findCouponInput()!
+    expect(findApplyButton(input)).toBeNull()
+  })
+
+  it('n’élit pas « Ajouter au panier » et préfère le vrai « OK » adjacent (frontières de mots)', () => {
+    document.body.innerHTML = `
+      <form>
+        <button type="button">Ajouter au panier</button>
+        <div class="coupon"><input type="text" name="coupon" /><button type="button">OK</button></div>
+      </form>
+    `
+    const input = findCouponInput()!
+    expect(findApplyButton(input)?.textContent).toBe('OK')
+  })
+
+  it('ne confond pas « Edit address » avec un bouton d’application (add ⊄ address)', () => {
+    document.body.innerHTML = `
+      <div class="coupon-box">
+        <input type="text" name="coupon" />
+        <button type="button">Edit address</button>
+      </div>
+    `
     const input = findCouponInput()!
     expect(findApplyButton(input)).toBeNull()
   })

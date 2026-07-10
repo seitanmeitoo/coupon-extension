@@ -26,6 +26,23 @@ const state = {
   manualWatch: null as { code: string; watch: OutcomeWatch } | null,
 }
 
+/**
+ * Retourne le champ coupon vivant. Après un re-rendu SPA, `state.input` peut
+ * pointer un nœud détaché (isConnected === false) : on re-détecte alors et on
+ * ré-attache les écouteurs (dédoublonnés par `wired`).
+ */
+function liveInput(): HTMLInputElement | null {
+  if (state.input !== null && state.input.isConnected) return state.input
+  const fresh = findCouponInput()
+  if (fresh !== null) {
+    state.input = fresh
+    attachManualListeners(fresh)
+  } else {
+    state.input = null
+  }
+  return state.input
+}
+
 /* ------------------------------------------------------------------ */
 /* Petit toast en français, sans dépendance                            */
 /* ------------------------------------------------------------------ */
@@ -129,7 +146,7 @@ function armManualWatch(code: string): void {
     if (outcome !== 'success' || state.reportedCodes.has(code)) return
     // Garde-fou : le champ contient-il toujours le code armé au moment du
     // verdict ? Évite d'attribuer une baisse de prix à un code déjà remplacé.
-    const current = state.input?.value.trim().toUpperCase()
+    const current = liveInput()?.value.trim().toUpperCase()
     if (current !== undefined && current !== '' && current !== code) return
     state.reportedCodes.add(code)
     const response = await sendToBackground({
@@ -139,39 +156,73 @@ function armManualWatch(code: string): void {
       success: true,
       manual: true,
     })
-    showToast(
-      response?.shared
-        ? `✓ Code « ${code} » vérifié et partagé anonymement avec la communauté. Merci !`
-        : `✓ Code « ${code} » vérifié — il fonctionne sur cette boutique.`,
-    )
+    if (response?.shared && response.simulated) {
+      // Mode démonstration : le pipeline Tier 3 a tourné mais rien n'a été envoyé.
+      showToast(`✓ Code « ${code} » vérifié — envoi communautaire simulé (mode démonstration).`)
+    } else if (response?.shared) {
+      showToast(`✓ Code « ${code} » vérifié et partagé anonymement avec la communauté. Merci !`)
+    } else {
+      showToast(`✓ Code « ${code} » vérifié — il fonctionne sur cette boutique.`)
+    }
   })
 }
 
-/** Geste de soumission détecté (clic ou Entrée) — uniquement s'il est humain. */
+/** Bouton « Appliquer » et conteneur du champ coupon, pour délimiter les gestes. */
+let applyButtonRef: HTMLElement | null = null
+let couponScope: HTMLElement | null = null
+
+/**
+ * Le geste vise-t-il réellement la zone coupon ? Sans cette borne, un clic
+ * n'importe où (ex. « Supprimer » un article, qui fait AUSSI baisser le total)
+ * armerait la surveillance et attribuerait la baisse à un code jamais soumis.
+ */
+function withinCouponScope(event: Event): boolean {
+  const path = event.composedPath()
+  if (state.input !== null && path.includes(state.input)) return true
+  if (applyButtonRef !== null && path.includes(applyButtonRef)) return true
+  if (couponScope !== null && path.includes(couponScope)) return true
+  return false
+}
+
+/** Geste de soumission détecté (clic ou Entrée) — uniquement s'il est humain et ciblé. */
 function onSubmitGesture(event: Event): void {
   if (!event.isTrusted || isProgrammaticInjection()) return
-  const input = state.input
+  if (!withinCouponScope(event)) return
+  const input = liveInput()
   if (input === null || !state.manuallyTyped) return
   const code = input.value.trim().toUpperCase()
   if (code.length >= 3) armManualWatch(code)
 }
 
+/** Éléments déjà munis de leurs écouteurs (évite les doublons après re-détection). */
+const wired = new WeakSet<HTMLInputElement>()
+
 function attachManualListeners(input: HTMLInputElement): void {
+  applyButtonRef = findApplyButton(input)
+  // Conteneur coupon (jamais le <form> entier, souvent global) pour borner les clics.
+  couponScope =
+    input.closest<HTMLElement>(
+      '[id*="coupon" i], [class*="coupon" i], [id*="promo" i], [class*="promo" i], fieldset',
+    ) ?? input.parentElement
+
+  if (wired.has(input)) return
+  wired.add(input)
+
   // Saisie : seul un événement `isTrusted` hors injection marque une frappe humaine.
   input.addEventListener('input', (event) => {
     state.manuallyTyped = event.isTrusted && !isProgrammaticInjection()
   })
 
-  // Soumission : Entrée dans le champ…
+  // Soumission : Entrée dans le champ.
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') onSubmitGesture(event)
   })
-
-  // …ou clic n'importe où dans le conteneur (bouton « Appliquer » compris).
-  // Phase de capture : la photographie des prix est prise AVANT que la page
-  // ne réagisse au clic et ne recalcule son total.
-  document.addEventListener('click', onSubmitGesture, { capture: true })
 }
+
+// Un unique écouteur de clic au niveau document, en phase de CAPTURE : la
+// photographie des prix est prise AVANT que la page ne recalcule son total.
+// `withinCouponScope` filtre pour ne réagir qu'aux clics de la zone coupon.
+document.addEventListener('click', onSubmitGesture, { capture: true })
 
 /* ------------------------------------------------------------------ */
 /* Commandes du popup (« Tester ce code »)                             */
@@ -180,12 +231,11 @@ function attachManualListeners(input: HTMLInputElement): void {
 chrome.runtime.onMessage.addListener((message: ContentCommand, _sender, sendResponse) => {
   if (message?.type !== 'APPLY_CODE') return false
 
-  const input = state.input ?? findCouponInput()
+  const input = liveInput()
   if (input === null) {
     sendResponse({ started: false })
     return false
   }
-  state.input = input
 
   const watch = startOutcomeWatch()
   applyCode(input, findApplyButton(input), message.code)
@@ -218,7 +268,14 @@ async function onInputFound(input: HTMLInputElement): Promise<void> {
   attachManualListeners(input)
 
   try {
-    const { coupons } = await sendToBackground({ type: 'GET_COUPONS', domain })
+    // couponFieldPresent = true : signale au worker qu'un vrai champ coupon
+    // existe ici. Le Tier 2 (scraping, qui révèle le domaine à l'annuaire tiers)
+    // n'est autorisé que dans ce cas — jamais sur simple ouverture du popup.
+    const { coupons } = await sendToBackground({
+      type: 'GET_COUPONS',
+      domain,
+      couponFieldPresent: true,
+    })
     if (coupons.length > 0) {
       showToast(`${coupons.length} code(s) promo connu(s) pour ce site — essai en cours…`)
       await tryCodesAutomatically(coupons)
@@ -238,17 +295,36 @@ function startDetection(): void {
   // Les caisses des SPA apparaissent souvent après coup : on re-scanne aux
   // mutations, avec un débounce de 500 ms pour rester léger.
   let debounceTimer: ReturnType<typeof setTimeout> | undefined
+  let lastAttempt = Date.now()
+
+  const attempt = (): void => {
+    lastAttempt = Date.now()
+    const input = findCouponInput()
+    if (input !== null) {
+      rescanner.disconnect()
+      clearInterval(guaranteed)
+      clearTimeout(safety)
+      void onInputFound(input)
+    }
+  }
+
   const rescanner = new MutationObserver(() => {
     clearTimeout(debounceTimer)
-    debounceTimer = setTimeout(() => {
-      const input = findCouponInput()
-      if (input !== null) {
-        rescanner.disconnect()
-        void onInputFound(input)
-      }
-    }, 500)
+    debounceTimer = setTimeout(attempt, 500)
   })
   rescanner.observe(document.body, { childList: true, subtree: true })
+
+  // Échéance maximale : sous des mutations continues (< 500 ms), le débounce
+  // pur repousserait la détection indéfiniment. On garantit un scan toutes les 2 s.
+  const guaranteed = setInterval(() => {
+    if (Date.now() - lastAttempt >= 2000) attempt()
+  }, 2000)
+
+  // Arrêt de sécurité : ne pas observer indéfiniment une page sans champ coupon.
+  const safety = setTimeout(() => {
+    rescanner.disconnect()
+    clearInterval(guaranteed)
+  }, 60000)
 }
 
 if (document.readyState === 'loading') {

@@ -18,7 +18,7 @@ Le moteur de sourcing des coupons interroge trois sources, de la plus fiable à 
 - **Payload minimal** : le Tier 3 transmet exactement trois champs — `domain`, `code`, `success`. Pas d'identifiant, pas de cookie (`credentials: 'omit'`), pas d'empreinte navigateur, pas d'historique.
 - **Préférences locales** : les réglages vivent dans `chrome.storage.local` (et non `sync`) — ils ne transitent pas par votre compte Google.
 - **Statistiques locales** : les compteurs affichés dans le popup ne quittent jamais votre appareil.
-- Les fetchs des Tiers 1 et 2 (flux GitHub, annuaire public) ne contiennent **aucune donnée utilisateur** — ce sont de simples lectures publiques, sans cookies.
+- **Recherche de coupons (Tiers 1 & 2)** : le Tier 1 lit un flux public GitHub (aucune donnée vous concernant). Le Tier 2 n'est déclenché **que lorsqu'un vrai champ « code promo » est détecté** sur une page de paiement — jamais à la simple ouverture du popup — et transmet alors le **nom du site visité** (le domaine) à un annuaire public pour y chercher des codes. Aucun identifiant personnel n'accompagne cette requête (`credentials: 'omit'`). Pour désactiver totalement toute requête sortante, il suffit de retirer les URLs de `src/config/index.ts`.
 - **Mode simulation** : `MOCK_CROWDSOURCE = true` dans `src/config/index.ts` — aucun envoi réseau du Tier 3 tant que vous n'avez pas configuré votre propre backend (`CROWDSOURCE_ENDPOINT`, REST type Supabase).
 
 ## Fonctionnement du content script

@@ -50,4 +50,14 @@ describe('extractCodesFromHtml', () => {
     const items = Array.from({ length: 20 }, (_, i) => `code : CODE${100 + i}`).join('<br>')
     expect(extractCodesFromHtml(items, 10)).toHaveLength(10)
   })
+
+  it('ne prend PAS la prose minuscule après un mot-clé pour un code (régression flag i)', () => {
+    expect(extractCodesFromHtml('Profitez du code livraison offerte')).toEqual([])
+    expect(extractCodesFromHtml('Use this coupon during checkout')).toEqual([])
+    expect(extractCodesFromHtml('Tous les codes promo valables partout')).toEqual([])
+  })
+
+  it('extrait toujours un vrai code MAJUSCULE même si le mot-clé est en minuscules', () => {
+    expect(extractCodesFromHtml('utilisez le code PROMO50 maintenant')).toEqual(['PROMO50'])
+  })
 })

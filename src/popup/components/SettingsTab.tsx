@@ -44,11 +44,16 @@ export default function SettingsTab({ settings, stats, onOptInChange }: Settings
         </h3>
         <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-indigo-900">
           <li>
-            Seuls trois champs sont transmis : <code className="font-mono">domaine</code>,{' '}
-            <code className="font-mono">code</code>, <code className="font-mono">succès</code>.
+            Partage : seuls trois champs sont transmis —{' '}
+            <code className="font-mono">domaine</code>, <code className="font-mono">code</code>,{' '}
+            <code className="font-mono">succès</code>. Jamais d'identifiant, de cookie, d'historique
+            ni d'adresse e-mail.
           </li>
-          <li>Jamais d'identifiant, de cookie, d'historique ni d'adresse e-mail.</li>
-          <li>Rien n'est envoyé tant que ce réglage est désactivé.</li>
+          <li>Aucun partage communautaire tant que ce réglage est désactivé.</li>
+          <li>
+            Recherche de coupons : sur une page de paiement, le nom du site visité peut être envoyé
+            à un annuaire public pour y chercher des codes (aucune donnée personnelle).
+          </li>
           <li>Vos statistiques ci-dessous restent sur votre appareil.</li>
         </ul>
       </section>

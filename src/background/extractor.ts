@@ -6,8 +6,15 @@
  * Un token n'est candidat que s'il apparaît à proximité d'un mot-clé « code /
  * coupon / promo » (contexte), pour éviter de ramasser n'importe quelle
  * constante en majuscules présente dans la page.
+ *
+ * IMPORTANT : le mot-clé est rendu insensible à la casse par des classes de
+ * caractères, MAIS la capture reste strictement `[A-Z0-9]`. On n'utilise donc
+ * PAS le drapeau `i` — sinon il rendrait aussi la capture insensible à la casse,
+ * et la prose minuscule après « code » (« code livraison offerte ») serait
+ * extraite comme un faux code (« LIVRAISON »). Les vrais codes sont en majuscules.
  */
-const CONTEXTUAL_CODE_RE = /(?:code|coupon|promo)[^A-Za-z0-9]{0,40}["'>\s]([A-Z0-9]{4,15})\b/gi
+const CONTEXTUAL_CODE_RE =
+  /(?:[Cc][Oo][Dd][Ee]|[Cc][Oo][Uu][Pp][Oo][Nn]|[Pp][Rr][Oo][Mm][Oo])[^A-Za-z0-9]{0,40}["'>\s]([A-Z0-9]{4,15})\b/g
 
 /** Tokens techniques fréquents dans le HTML, jamais des codes promo. */
 const BLACKLIST = new Set([

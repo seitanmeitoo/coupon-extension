@@ -46,12 +46,23 @@ async function fetchFeed(url: string): Promise<CommunityFeed> {
   return (await response.json()) as CommunityFeed
 }
 
+/** Résultat d'un rafraîchissement Tier 1. */
+export interface RefreshResult {
+  /** Nombre de domaines couverts après rafraîchissement. */
+  domains: number
+  /** `true` si le flux a réellement été chargé depuis le réseau (et non le repli). */
+  remote: boolean
+}
+
 /**
  * Rafraîchit le Tier 1 : essaie chaque source dans l'ordre, persiste la première
- * qui répond ; à défaut, retombe sur le flux embarqué. Retourne le nombre de
- * domaines couverts.
+ * qui répond ; à défaut, retombe sur le flux embarqué.
+ *
+ * `remote` distingue un vrai chargement réseau d'un repli hors-ligne : sur repli,
+ * la fraîcheur n'est PAS marquée comme complète (re-tentative rapide via un TTL
+ * court), et le popup peut afficher un message honnête au lieu de « à jour ».
  */
-export async function refreshTier1(): Promise<number> {
+export async function refreshTier1(): Promise<RefreshResult> {
   for (const url of TIER1_SOURCES) {
     try {
       const feed = await fetchFeed(url)
@@ -63,18 +74,18 @@ export async function refreshTier1(): Promise<number> {
       for (const [domain, list] of Object.entries(seeded)) {
         coupons[domain] = [...(coupons[domain] ?? []), ...list]
       }
-      await replaceCommunityCoupons(coupons)
+      await replaceCommunityCoupons(coupons, { fromNetwork: true })
       console.info(`[Tier 1] Flux communautaire chargé depuis ${url}`)
-      return Object.keys(coupons).length
+      return { domains: Object.keys(coupons).length, remote: true }
     } catch (error) {
       console.warn(`[Tier 1] Échec de la source ${url} :`, error)
     }
   }
   // Repli hors-ligne : le flux simulé embarqué dans l'extension.
   const fallback = feedToCoupons(bundledFeed as CommunityFeed)
-  await replaceCommunityCoupons(fallback)
+  await replaceCommunityCoupons(fallback, { fromNetwork: false })
   console.info('[Tier 1] Repli sur le flux embarqué (réseau indisponible).')
-  return Object.keys(fallback).length
+  return { domains: Object.keys(fallback).length, remote: false }
 }
 
 /** Rafraîchit le Tier 1 seulement si les données sont plus vieilles que le TTL. */

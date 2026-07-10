@@ -14,7 +14,12 @@ const FAST_SELECTORS = [
   'input[id*="reduction" i]',
 ]
 
-/** Mots-clés pesés pour le scoring des champs texte (FR + EN). */
+/**
+ * Mots-clés pesés pour le scoring des champs texte (FR + EN).
+ * Volontairement SANS « carte cadeau » / « gift card » : un numéro de carte
+ * cadeau est un secret à valeur monétaire (un identifiant, pas un code promo).
+ * Le détecter risquerait de le remplir/partager par erreur — vie privée d'abord.
+ */
 const KEYWORDS = [
   'code promo',
   'code de réduction',
@@ -28,8 +33,6 @@ const KEYWORDS = [
   'discount',
   'voucher',
   'promotion',
-  'gift card',
-  'carte cadeau',
 ]
 
 /** Un input est-il candidat (champ texte libre, ni caché ni désactivé) ? */
@@ -94,8 +97,14 @@ export function findCouponInput(root: ParentNode = document): HTMLInputElement |
   return best
 }
 
-/** Texte d'un bouton évoquant l'application d'un code (FR + EN). */
-const APPLY_BUTTON_RE = /appliquer|valider|ajouter|utiliser|activer|ok|apply|submit|redeem|activate|add/i
+/**
+ * Texte d'un bouton évoquant l'application d'un code (FR + EN).
+ * Frontières de mots `\b` OBLIGATOIRES : sans elles, « add » matchait « address »
+ * et « ok » matchait « book », faisant cliquer des boutons arbitraires. On exclut
+ * aussi « ajouter » / « add » (trop proches de « Ajouter au panier » / « add to
+ * cart ») : cliquer ces boutons ajouterait des articles au lieu d'appliquer le code.
+ */
+const APPLY_BUTTON_RE = /\b(?:appliquer|valider|utiliser|activer|ok|apply|submit|redeem|activate)\b/i
 
 /**
  * Cherche le bouton « Appliquer » associé au champ coupon : d'abord dans le

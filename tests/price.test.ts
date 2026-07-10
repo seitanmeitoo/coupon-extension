@@ -48,6 +48,28 @@ describe('findPrices', () => {
   it('ignore les nombres sans devise', () => {
     expect(findPrices('Article 42, quantité 3')).toEqual([])
   })
+
+  it('ne prend PAS « eur » à l’intérieur d’un mot pour une devise (régression \\b + casse)', () => {
+    expect(findPrices('Meilleur 3 choix disponibles')).toEqual([])
+  })
+
+  it('ignore un code devise en minuscules (prose)', () => {
+    expect(findPrices('environ 40 eur selon la source')).toEqual([])
+  })
+
+  it('reconnaît toujours un code devise ISO en majuscules', () => {
+    expect(findPrices('USD 12.99')).toEqual([12.99])
+  })
+})
+
+describe('containsFailureMessage / containsSuccessMessage — robustesse (anti-ReDoS)', () => {
+  it('reste rapide et sans faux positif sur un très long texte hostile', () => {
+    const hostile = 'code ' + ' '.repeat(50000) + 'x'
+    const start = performance.now()
+    expect(containsFailureMessage(hostile)).toBe(false)
+    expect(containsSuccessMessage(hostile)).toBe(false)
+    expect(performance.now() - start).toBeLessThan(50) // linéaire, pas de gel
+  })
 })
 
 describe('isTotalContext', () => {

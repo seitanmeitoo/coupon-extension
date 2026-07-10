@@ -4,12 +4,18 @@
 
 /** Séparateurs de milliers possibles : espace, espace insécable (fine ou non). */
 const AMOUNT = String.raw`\d{1,5}(?:[   .,]\d{3})*(?:[.,]\d{2})?`
-const CURRENCY = String.raw`€|EUR|\$|USD|£|GBP`
+/**
+ * Symboles monétaires (non alphabétiques) + codes ISO alphabétiques.
+ * Les codes alphabétiques exigent des frontières de mots `\b` et sont
+ * SENSIBLES À LA CASSE (pas de drapeau `i`) : sinon « eur » à l'intérieur de
+ * « meilleur » ou la prose minuscule seraient pris pour une devise.
+ */
+const CURRENCY = String.raw`€|\$|£|\bEUR\b|\bUSD\b|\bGBP\b`
 
-/** Prix avec devise après (« 59,99 € ») ou avant (« $12.99 »). */
+/** Prix avec devise après (« 59,99 € ») ou avant (« $12.99 »). Pas de drapeau `i`. */
 const PRICE_RE = new RegExp(
   String.raw`(?:(${AMOUNT})\s*(?:${CURRENCY}))|(?:(?:${CURRENCY})\s*(${AMOUNT}))`,
-  'gi',
+  'g',
 )
 
 /**
@@ -47,16 +53,30 @@ export function isTotalContext(context: string): boolean {
   )
 }
 
+/**
+ * Longueur maximale de texte analysée par les détecteurs de message.
+ * Ces fonctions sont appelées par le MutationObserver sur le texte de nœuds
+ * potentiellement énormes ; borner l'entrée garantit un temps linéaire et évite
+ * tout gel de l'onglet sur une page hostile (protection anti-ReDoS).
+ */
+const MAX_SCAN = 2000
+
+// Mots-clés d'échec, sans préfixe optionnel `\s*` (source du ReDoS quadratique) :
+// les termes eux-mêmes sont assez distinctifs pour ancrer la détection.
+const FAILURE_RE =
+  /invalide|non valide|expir[ée]|incorrect|inconnu|refus[ée]|introuvable|invalid|not valid|expired|no longer valid|unrecognized|does ?n['o]t (?:work|exist)/i
+
+// Succès : un mot-clé suivi d'une action, avec des quantificateurs BORNÉS
+// (`\s{0,3}` au lieu de `\s*`) pour éliminer le retour arrière catastrophique.
+const SUCCESS_RE =
+  /(?:code|coupon|réduction|remise|discount)\s{0,3}(?:promo\s{0,3})?(?:appliqué[ée]?s?|ajouté[ée]?s?|activé[ée]?s?|applied|added|activated)|économisez|you saved/i
+
 /** Le texte contient-il un message d'échec de code promo ? (FR + EN) */
 export function containsFailureMessage(text: string): boolean {
-  return /(?:code|coupon|bon)?\s*(?:promo(?:tionnel)?\s*)?(?:invalide|non valide|expir[ée]|incorrect|inconnu|refus[ée]|introuvable|invalid|not valid|expired|does\s?n[o']t (?:work|exist)|no longer valid|unrecognized)/i.test(
-    text,
-  )
+  return FAILURE_RE.test(text.slice(0, MAX_SCAN))
 }
 
 /** Le texte contient-il un message de succès explicite ? (renfort de la baisse de prix) */
 export function containsSuccessMessage(text: string): boolean {
-  return /(?:code|coupon|réduction|remise|discount)\s*(?:promo\s*)?(?:appliqué[ée]?s?|ajouté[ée]?s?|activé[ée]?s?|applied|added|activated)|économisez|you saved/i.test(
-    text,
-  )
+  return SUCCESS_RE.test(text.slice(0, MAX_SCAN))
 }
