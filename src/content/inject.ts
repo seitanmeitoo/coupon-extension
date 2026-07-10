@@ -8,9 +8,9 @@
 import { normalizeDomain } from '../lib/domain'
 import { sendToBackground, type ContentCommand } from '../lib/messaging'
 import type { Coupon } from '../types'
-import { applyCode, isProgrammaticInjection } from './applier'
+import { applyCode, clearInput, isProgrammaticInjection } from './applier'
 import { findApplyButton, findCouponInput } from './detect'
-import { startOutcomeWatch } from './observer'
+import { startOutcomeWatch, type OutcomeWatch } from './observer'
 
 const domain = normalizeDomain(location.hostname)
 
@@ -22,7 +22,8 @@ const state = {
   manuallyTyped: false,
   /** Codes déjà remontés au worker sur cette page (anti-doublon). */
   reportedCodes: new Set<string>(),
-  manualWatchActive: false,
+  /** Surveillance en cours d'un code tapé manuellement (avec le code armé). */
+  manualWatch: null as { code: string; watch: OutcomeWatch } | null,
 }
 
 /* ------------------------------------------------------------------ */
@@ -91,9 +92,9 @@ async function tryCodesAutomatically(coupons: Coupon[]): Promise<void> {
   showToast('Aucun des codes connus n’a fonctionné sur cette page.')
 }
 
-/** Vide le champ de façon programmatique (le drapeau couvre l'événement émis). */
+/** Vide le champ de façon programmatique, SANS soumettre (voir clearInput). */
 function applyCleanup(input: HTMLInputElement): void {
-  applyCode(input, null, '')
+  clearInput(input)
   state.manuallyTyped = false
 }
 
@@ -105,17 +106,31 @@ function applyCleanup(input: HTMLInputElement): void {
  * Arme une fenêtre d'observation après un geste de soumission de l'utilisateur.
  * Si le prix baisse (ou qu'un message de succès apparaît), le code TAPÉ À LA
  * MAIN est remonté au worker, qui ne le partagera que si l'opt-in est actif.
+ *
+ * Un nouveau geste avec un code DIFFÉRENT annule la surveillance précédente et
+ * la remplace : sans cela, l'utilisateur qui essaie « FAUX » puis « BON » dans
+ * la même fenêtre verrait la baisse de prix attribuée au mauvais code.
  */
 function armManualWatch(code: string): void {
-  if (state.manualWatchActive || state.reportedCodes.has(code)) return
-  state.manualWatchActive = true
+  if (state.reportedCodes.has(code)) return
+  if (state.manualWatch !== null) {
+    if (state.manualWatch.code === code) return // déjà armé pour ce code
+    state.manualWatch.watch.cancel() // code différent : on abandonne l'ancienne surveillance
+  }
   // Appelé en phase de CAPTURE du clic : la photographie des prix est prise
   // avant que la page ne réagisse et ne recalcule son total.
   const watch = startOutcomeWatch({ windowMs: 15000 })
+  state.manualWatch = { code, watch }
 
   void watch.result.then(async (outcome) => {
-    state.manualWatchActive = false
+    // Une surveillance annulée (remplacée) résout en 'timeout' : on l'ignore.
+    if (state.manualWatch?.watch !== watch) return
+    state.manualWatch = null
     if (outcome !== 'success' || state.reportedCodes.has(code)) return
+    // Garde-fou : le champ contient-il toujours le code armé au moment du
+    // verdict ? Évite d'attribuer une baisse de prix à un code déjà remplacé.
+    const current = state.input?.value.trim().toUpperCase()
+    if (current !== undefined && current !== '' && current !== code) return
     state.reportedCodes.add(code)
     const response = await sendToBackground({
       type: 'REPORT_RESULT',

@@ -23,7 +23,7 @@
       <div class="ligne"><span>Livraison express</span><span>10,00 €</span></div>
       <div class="ligne total-ligne"><span>Total à payer</span><span id="total">59,99 €</span></div>
 
-      <div class="coupon-zone">
+      <div class="coupon-zone" id="coupon-zone">
         <label for="code-promo" style="display:none">Code promo</label>
         <input type="text" id="code-promo" name="coupon" placeholder="Code promo" />
         <button type="button" id="appliquer">Appliquer</button>
@@ -32,10 +32,26 @@
     </div>
 
     <script>
-      // Boutique factice : le code valide est configurable via ?valid=XXXX
-      // (BIENVENUE10 par défaut) pour tester le parcours « saisie manuelle ».
+      // Boutique factice paramétrable :
+      //   ?valid=XXXX  → code qui fait baisser le prix (BIENVENUE10 par défaut)
+      //   ?form=1      → enveloppe le champ dans un <form> (reproduit le cas où
+      //                  un nettoyage mal fait soumettrait un formulaire vide)
       const params = new URLSearchParams(location.search)
       const codeValide = (params.get('valid') || 'BIENVENUE10').toUpperCase()
+
+      // window.__formSubmitted : sentinelle lue par le smoke test.
+      window.__formSubmitted = false
+      if (params.get('form') === '1') {
+        const zone = document.getElementById('coupon-zone')
+        const form = document.createElement('form')
+        form.id = 'coupon-form'
+        zone.replaceWith(form)
+        form.appendChild(zone)
+        form.addEventListener('submit', (e) => {
+          e.preventDefault()
+          window.__formSubmitted = true
+        })
+      }
 
       const total = document.getElementById('total')
       const message = document.getElementById('message')

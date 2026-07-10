@@ -47,3 +47,20 @@ export function applyCode(
     programmaticDepth--
   }
 }
+
+/**
+ * Vide le champ SANS rien soumettre. À utiliser pour nettoyer après une série
+ * de codes infructueux : passer par `applyCode(input, null, '')` déclencherait
+ * `input.form.requestSubmit()` sur les boutiques où le champ est dans un <form>,
+ * soumettant un formulaire vide (voire rechargeant la page). Le drapeau
+ * programmatique couvre l'événement émis pour ne pas le confondre avec une
+ * saisie manuelle.
+ */
+export function clearInput(input: HTMLInputElement): void {
+  programmaticDepth++
+  try {
+    setInputValueNative(input, '')
+  } finally {
+    programmaticDepth--
+  }
+}

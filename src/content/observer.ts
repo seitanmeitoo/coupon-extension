@@ -73,6 +73,8 @@ export interface WatchOptions {
 export interface OutcomeWatch {
   /** Résout avec le verdict : succès, échec ou fenêtre écoulée. */
   result: Promise<Outcome>
+  /** Interrompt l'observation immédiatement (résout en 'timeout'). */
+  cancel: () => void
 }
 
 /**
@@ -94,6 +96,10 @@ export function startOutcomeWatch(options: WatchOptions = {}): OutcomeWatch {
   const { windowMs = 6000, debounceMs = 800, checkIntervalMs = 1000 } = options
   const before = snapshotPrices()
 
+  // Assignée dans l'exécuteur ; permet à l'appelant d'interrompre la surveillance
+  // (ex. un nouveau geste de soumission remplace le code en cours d'observation).
+  let cancel = (): void => {}
+
   const result = new Promise<Outcome>((resolve) => {
     let debounceTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -104,6 +110,8 @@ export function startOutcomeWatch(options: WatchOptions = {}): OutcomeWatch {
       observer.disconnect()
       resolve(outcome)
     }
+
+    cancel = () => finish('timeout')
 
     const evaluate = (): void => {
       const after = snapshotPrices()
@@ -155,5 +163,5 @@ export function startOutcomeWatch(options: WatchOptions = {}): OutcomeWatch {
     }, windowMs)
   })
 
-  return { result }
+  return { result, cancel }
 }

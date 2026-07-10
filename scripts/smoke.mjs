@@ -3,7 +3,8 @@
 //   1. artefacts du build corrects (manifest, worker ESM, content script IIFE) ;
 //   2. popup React en français + activation de l'opt-in de partage ;
 //   3. application AUTOMATIQUE d'un code connu (baisse de prix détectée) ;
-//   4. saisie MANUELLE d'un code inconnu → partage anonyme (Tier 3, mode mock).
+//   4. saisie MANUELLE d'un code inconnu → partage anonyme (Tier 3, mode mock) ;
+//   5. régression : le nettoyage du champ ne soumet jamais le <form> englobant.
 //
 // Prérequis : `npm run build`. Lancement : `npm run smoke`.
 
@@ -32,7 +33,7 @@ function check(condition, label) {
 /* 1. Vérifications statiques du build                                  */
 /* ------------------------------------------------------------------ */
 
-console.log('\n[1/4] Artefacts du build')
+console.log('\n[1/5] Artefacts du build')
 for (const artefact of ['manifest.json', 'index.html', 'worker.js', 'content.js']) {
   check(existsSync(join(DIST, artefact)), `dist/${artefact} présent`)
 }
@@ -91,7 +92,7 @@ try {
   console.log(`\nExtension chargée : ${extensionId}`)
 
   /* ---------------- 2. Popup en français + opt-in ------------------ */
-  console.log('\n[2/4] Popup (français) et opt-in de partage')
+  console.log('\n[2/5] Popup (français) et opt-in de partage')
   const popup = await context.newPage()
   await popup.goto(`chrome-extension://${extensionId}/index.html`)
   await popup.waitForSelector('text=Chasseur de Coupons', { timeout: 10000 })
@@ -115,7 +116,7 @@ try {
   check(settings.settings?.crowdsourceOptIn === true, 'opt-in persisté dans chrome.storage.local')
 
   /* ---------------- 3. Application automatique --------------------- */
-  console.log('\n[3/4] Application automatique d’un code connu')
+  console.log('\n[3/5] Application automatique d’un code connu')
   const shop = await context.newPage()
   shop.on('console', (msg) => {
     if (msg.text().includes('[Coupons]')) console.log(`    (page) ${msg.text()}`)
@@ -131,7 +132,7 @@ try {
   check(bodyText.includes('appliqué'), 'toast de succès en français')
 
   /* ---------------- 4. Saisie manuelle → Tier 3 -------------------- */
-  console.log('\n[4/4] Saisie manuelle → crowdsourcing anonyme (mode mock)')
+  console.log('\n[4/5] Saisie manuelle → crowdsourcing anonyme (mode mock)')
   const manual = await context.newPage()
   await manual.goto(`${SHOP}?valid=MANUEL5`)
   // Les codes connus échouent d'abord (BIENVENUE10 puis SOLDES2026).
@@ -163,6 +164,24 @@ try {
   check(manualCoupon?.source === 'crowdsourced', 'code MANUEL5 mémorisé avec la source « crowdsourced »')
   check((stored.stats?.shared ?? 0) >= 1, 'compteur de partages anonymes incrémenté')
   check((stored.stats?.applied ?? 0) >= 2, 'compteur de codes appliqués incrémenté')
+
+  /* -------- 5. Régression : nettoyage ne soumet pas le <form> ------- */
+  console.log('\n[5/5] Régression : le nettoyage ne soumet jamais le formulaire')
+  const formed = await context.newPage()
+  // valid=RIEN : aucun code connu ne marche → applyCleanup est appelé, avec le
+  // champ à l'intérieur d'un <form>. Le formulaire ne doit PAS être soumis.
+  await formed.goto(`${SHOP}?form=1&valid=AUCUNMATCH`)
+  await formed.waitForFunction(
+    () => document.body.innerText.includes('Aucun des codes connus'),
+    { timeout: 30000 },
+  )
+  await formed.waitForTimeout(500)
+  const submitted = await formed.evaluate(() => window.__formSubmitted === true)
+  check(submitted === false, 'le formulaire n’a pas été soumis lors du nettoyage du champ')
+  const champVide = await formed.evaluate(
+    () => document.getElementById('code-promo')?.value === '',
+  )
+  check(champVide, 'le champ coupon a bien été vidé après les essais infructueux')
 } finally {
   await context.close()
   server.close()
