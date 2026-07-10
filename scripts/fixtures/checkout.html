@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Boutique de démonstration — Paiement</title>
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; max-width: 520px; margin: 40px auto; color: #1f2937; }
+      .panier { border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; }
+      .ligne { display: flex; justify-content: space-between; margin-bottom: 8px; }
+      .total-ligne { font-weight: 700; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+      .coupon-zone { margin-top: 16px; display: flex; gap: 8px; }
+      input { flex: 1; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; }
+      button { padding: 8px 14px; border: 0; border-radius: 8px; background: #4f46e5; color: #fff; cursor: pointer; }
+      #message { margin-top: 10px; font-size: 14px; min-height: 20px; }
+      #message.ok { color: #059669; }
+      #message.ko { color: #dc2626; }
+    </style>
+  </head>
+  <body>
+    <h1>Votre commande</h1>
+    <div class="panier">
+      <div class="ligne"><span>Chaussures de course</span><span>49,99 €</span></div>
+      <div class="ligne"><span>Livraison express</span><span>10,00 €</span></div>
+      <div class="ligne total-ligne"><span>Total à payer</span><span id="total">59,99 €</span></div>
+
+      <div class="coupon-zone">
+        <label for="code-promo" style="display:none">Code promo</label>
+        <input type="text" id="code-promo" name="coupon" placeholder="Code promo" />
+        <button type="button" id="appliquer">Appliquer</button>
+      </div>
+      <div id="message" aria-live="polite"></div>
+    </div>
+
+    <script>
+      // Boutique factice : le code valide est configurable via ?valid=XXXX
+      // (BIENVENUE10 par défaut) pour tester le parcours « saisie manuelle ».
+      const params = new URLSearchParams(location.search)
+      const codeValide = (params.get('valid') || 'BIENVENUE10').toUpperCase()
+
+      const total = document.getElementById('total')
+      const message = document.getElementById('message')
+      const champ = document.getElementById('code-promo')
+
+      document.getElementById('appliquer').addEventListener('click', () => {
+        const saisie = champ.value.trim().toUpperCase()
+        if (saisie === '') return
+        if (saisie === codeValide) {
+          total.textContent = '53,99 €'
+          message.textContent = 'Code promo appliqué !'
+          message.className = 'ok'
+        } else {
+          message.textContent = 'Code promo invalide.'
+          message.className = 'ko'
+        }
+      })
+    </script>
+  </body>
+</html>

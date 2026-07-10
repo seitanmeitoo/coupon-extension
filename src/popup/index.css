@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Largeur fixe du popup d'extension. */
+body {
+  width: 380px;
+  margin: 0;
+}
