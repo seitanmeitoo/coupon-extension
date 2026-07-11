@@ -1,4 +1,5 @@
 // En-tête du popup : identité de l'extension + domaine actif.
+import { t } from '../../lib/i18n'
 
 interface HeaderProps {
   domain: string | null
@@ -11,15 +12,15 @@ export default function Header({ domain }: HeaderProps) {
         <span className="text-xl" aria-hidden="true">
           🎟️
         </span>
-        <h1 className="text-base font-bold">Chasseur de Coupons</h1>
+        <h1 className="text-base font-bold">{t('appTitle')}</h1>
       </div>
       <p className="mt-0.5 text-xs text-indigo-200">
         {domain !== null ? (
           <>
-            Site actif : <span className="font-semibold text-white">{domain}</span>
+            {t('headerActiveSite')} <span className="font-semibold text-white">{domain}</span>
           </>
         ) : (
-          'Aucune boutique détectée dans cet onglet'
+          t('headerNoSite')
         )}
       </p>
     </header>

@@ -33,6 +33,8 @@ export interface ReportResultRequest {
   code: string
   success: boolean
   manual: boolean
+  /** Montant économisé estimé (si mesurable), pour les stats et l'historique. */
+  saved?: number
 }
 
 /** Force un rafraîchissement du flux Tier 1 (bouton « Actualiser » du popup). */

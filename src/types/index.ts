@@ -19,6 +19,8 @@ export interface Coupon {
   source: CouponSource
   /** Date d'ajout local (epoch ms). */
   addedAt: number
+  /** Date de péremption (epoch ms) — au-delà, le coupon est purgé. Optionnel. */
+  expiresAt?: number
 }
 
 /** Réglages utilisateur — vie privée d'abord : tout est désactivé par défaut. */
@@ -33,10 +35,29 @@ export interface Stats {
   applied: number
   /** Nombre de codes partagés anonymement avec la communauté. */
   shared: number
+  /** Montant total économisé estimé (dans la devise détectée sur les pages). */
+  savedTotal: number
 }
+
+/** Entrée d'historique d'application (locale, jamais transmise). */
+export interface HistoryEntry {
+  /** Domaine normalisé où le code a été appliqué. */
+  domain: string
+  /** Code appliqué. */
+  code: string
+  /** Montant économisé estimé, si mesurable. */
+  saved?: number
+  /** Horodatage de l'application (epoch ms). */
+  at: number
+}
+
+/** Version courante du schéma de stockage (voir src/lib/migrations.ts). */
+export const CURRENT_SCHEMA_VERSION = 1
 
 /** Schéma complet de `chrome.storage.local`. */
 export interface StorageSchema {
+  /** Version du schéma persisté — pilote les migrations. */
+  schemaVersion: number
   /** Coupons connus, indexés par domaine normalisé (ex. « boutique.fr »). */
   coupons: Record<string, Coupon[]>
   /** Métadonnées internes (fraîcheur du Tier 1, refroidissement du Tier 2). */
@@ -47,6 +68,8 @@ export interface StorageSchema {
   }
   settings: Settings
   stats: Stats
+  /** Historique local des codes appliqués (borné, récent en tête). */
+  history: HistoryEntry[]
 }
 
 /** Entrée brute du flux communautaire (format du dépôt GitHub coupon-feed). */

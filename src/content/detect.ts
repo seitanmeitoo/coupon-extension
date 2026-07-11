@@ -1,5 +1,8 @@
 // Détection des champs « code promo » sur les pages de paiement.
-// Heuristiques bilingues (français + anglais), testables en jsdom.
+// Cascade : sélecteur spécifique au domaine → sélecteur de plateforme →
+// heuristiques bilingues (français + anglais). Testable en jsdom.
+
+import { selectorsForDomain, selectorsForPlatform, type DomainSelector } from './selectors'
 
 /** Sélecteurs rapides : attributs explicites, essayés en premier. */
 const FAST_SELECTORS = [
@@ -73,15 +76,34 @@ export function scoreInput(input: HTMLInputElement): number {
   return score
 }
 
+/** Résout le premier champ candidat d'un sélecteur CSS (ou null). */
+function firstCandidate(root: ParentNode, selector: string | undefined): HTMLInputElement | null {
+  if (selector === undefined) return null
+  for (const input of root.querySelectorAll<HTMLInputElement>(selector)) {
+    if (isCandidateInput(input)) return input
+  }
+  return null
+}
+
 /**
- * Cherche le champ « code promo » le plus plausible de la page.
- * 1. Sélecteurs rapides (attributs explicites).
- * 2. À défaut, scoring de tous les champs texte de la page.
+ * Cherche le champ « code promo » le plus plausible de la page, en cascade :
+ * 1. Sélecteur SPÉCIFIQUE au domaine (le plus fiable).
+ * 2. Sélecteur de la PLATEFORME détectée (Shopify, WooCommerce…).
+ * 3. Sélecteurs rapides génériques (attributs explicites).
+ * 4. Scoring de tous les champs texte de la page.
  */
-export function findCouponInput(root: ParentNode = document): HTMLInputElement | null {
+export function findCouponInput(root: ParentNode = document, domain?: string): HTMLInputElement | null {
+  const domainSel = domain !== undefined ? selectorsForDomain(domain) : null
+  const fromDomain = firstCandidate(root, domainSel?.field)
+  if (fromDomain !== null) return fromDomain
+
+  const platformSel = selectorsForPlatform(root)
+  const fromPlatform = firstCandidate(root, platformSel?.field)
+  if (fromPlatform !== null) return fromPlatform
+
   for (const selector of FAST_SELECTORS) {
-    const input = root.querySelector<HTMLInputElement>(selector)
-    if (input !== null && isCandidateInput(input)) return input
+    const input = firstCandidate(root, selector)
+    if (input !== null) return input
   }
 
   let best: HTMLInputElement | null = null
@@ -98,6 +120,45 @@ export function findCouponInput(root: ParentNode = document): HTMLInputElement |
 }
 
 /**
+ * Le bouton est-il à PROXIMITÉ du champ coupon ? On remonte jusqu'à 6 ancêtres
+ * du champ (sans jamais utiliser le <form>, souvent global sur les caisses) : le
+ * bouton doit être contenu dans l'un d'eux. Garde-fou contre un sélecteur de
+ * bouton trop large qui viserait un submit d'en-tête ou de commande ailleurs.
+ */
+function isNearInput(input: HTMLInputElement, button: HTMLElement): boolean {
+  const doc = input.ownerDocument
+  let ancestor: HTMLElement | null = input.parentElement
+  for (let depth = 0; ancestor !== null && depth < 6; depth++) {
+    // On ne remonte jamais jusqu'à <body>/<html> : ils contiennent toute la page
+    // et rendraient la garde inutile.
+    if (ancestor === doc.body || ancestor === doc.documentElement) break
+    if (ancestor.contains(button)) return true
+    ancestor = ancestor.parentElement
+  }
+  return false
+}
+
+/**
+ * Bouton d'application désigné par le sélecteur domaine/plateforme, s'il existe
+ * ET s'il est proche du champ. Un bouton résolu au niveau document mais éloigné
+ * du champ est rejeté (on retombe alors sur l'heuristique bornée).
+ */
+function targetedApplyButton(input: HTMLInputElement, domain?: string): HTMLElement | null {
+  const doc = input.ownerDocument
+  const sels: (DomainSelector | null)[] = [
+    domain !== undefined ? selectorsForDomain(domain) : null,
+    selectorsForPlatform(doc),
+  ]
+  for (const sel of sels) {
+    if (sel?.button === undefined) continue
+    for (const button of doc.querySelectorAll<HTMLElement>(sel.button)) {
+      if (isNearInput(input, button)) return button
+    }
+  }
+  return null
+}
+
+/**
  * Texte d'un bouton évoquant l'application d'un code (FR + EN).
  * Frontières de mots `\b` OBLIGATOIRES : sans elles, « add » matchait « address »
  * et « ok » matchait « book », faisant cliquer des boutons arbitraires. On exclut
@@ -107,10 +168,14 @@ export function findCouponInput(root: ParentNode = document): HTMLInputElement |
 const APPLY_BUTTON_RE = /\b(?:appliquer|valider|utiliser|activer|ok|apply|submit|redeem|activate)\b/i
 
 /**
- * Cherche le bouton « Appliquer » associé au champ coupon : d'abord dans le
- * même <form>, puis en remontant jusqu'à 4 conteneurs ancêtres.
+ * Cherche le bouton « Appliquer » associé au champ coupon.
+ * Priorité au bouton désigné par le sélecteur domaine/plateforme ; à défaut,
+ * recherche dans le même <form> puis en remontant jusqu'à 4 conteneurs ancêtres.
  */
-export function findApplyButton(input: HTMLInputElement): HTMLElement | null {
+export function findApplyButton(input: HTMLInputElement, domain?: string): HTMLElement | null {
+  const targeted = targetedApplyButton(input, domain)
+  if (targeted !== null) return targeted
+
   const scopes: ParentNode[] = []
   if (input.form !== null) scopes.push(input.form)
   let ancestor: HTMLElement | null = input.parentElement

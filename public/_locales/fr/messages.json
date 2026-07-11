@@ -1,0 +1,51 @@
+{
+  "appTitle": { "message": "Chasseur de Coupons" },
+  "tabCoupons": { "message": "Coupons" },
+  "tabHistory": { "message": "Historique" },
+  "tabSettings": { "message": "Réglages" },
+
+  "headerActiveSite": { "message": "Site actif :" },
+  "headerNoSite": { "message": "Aucune boutique détectée dans cet onglet" },
+
+  "couponsForSite": { "message": "{count} code(s) pour ce site" },
+  "couponsNone": { "message": "Rien en stock pour ce site" },
+  "searching": { "message": "Recherche de coupons…" },
+  "refresh": { "message": "↻ Actualiser" },
+  "refreshing": { "message": "Actualisation…" },
+
+  "emptyTitle": { "message": "Aucun coupon trouvé pour ce site" },
+  "emptyWithDomain": { "message": "Nous n'avons encore aucun code pour « {domain} ». Si vous en découvrez un qui fonctionne, il sera proposé au partage communautaire (si vous l'avez activé)." },
+  "emptyNoDomain": { "message": "Ouvrez une boutique en ligne puis cliquez sur l'icône de l'extension." },
+
+  "successRate": { "message": "{percent} % de réussite" },
+  "copy": { "message": "Copier" },
+  "copied": { "message": "Copié !" },
+  "testCode": { "message": "Tester ce code" },
+
+  "sourceCommunity": { "message": "Source : Base communautaire" },
+  "sourceScraped": { "message": "Source : Web scrapé" },
+  "sourceCrowdsourced": { "message": "Source : Crowdsourcé" },
+
+  "settingsShareTitle": { "message": "Partage communautaire anonyme" },
+  "settingsShareDesc": { "message": "Quand un code que vous avez tapé vous-même fait baisser le prix, il est proposé à la communauté — de façon strictement anonyme." },
+  "settingsShareOn": { "message": "Partage activé — merci pour la communauté !" },
+  "settingsShareOff": { "message": "Partage désactivé (par défaut)." },
+
+  "statApplied": { "message": "codes appliqués avec succès" },
+  "statShared": { "message": "codes partagés anonymement" },
+  "statSaved": { "message": "économisé (estimation)" },
+
+  "historyEmpty": { "message": "Aucun code appliqué pour l'instant." },
+  "historySavedOn": { "message": "sur {domain}" },
+  "historySavedAmount": { "message": "− {amount}" },
+
+  "footerPrivacy": { "message": "Vie privée d'abord : aucun identifiant ne quitte votre navigateur." },
+
+  "noticeWorkerError": { "message": "Impossible de contacter le service worker de l'extension." },
+  "noticeTier1Refreshed": { "message": "Base communautaire actualisée ({domains} boutiques couvertes)." },
+  "noticeTier1Partial": { "message": "Actualisation partielle : le flux distant est resté injoignable." },
+  "noticeRefreshFailed": { "message": "Actualisation impossible pour le moment." },
+  "noticeTestStarted": { "message": "Essai du code « {code} » lancé sur la page…" },
+  "noticeTestNoField": { "message": "Aucun champ « code promo » détecté sur cette page." },
+  "noticeTestUnavailable": { "message": "Cette page ne permet pas l'essai automatique (rechargez-la et réessayez)." }
+}

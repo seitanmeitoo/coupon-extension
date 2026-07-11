@@ -1,0 +1,28 @@
+{
+  "_comment": "Flux Tier 1 auto-hébergé, curé par le projet. Format : domaine → [{ code, description, successRate }]. Ce sont des entrées d'exemple/graine : l'extension les ESSAIE puis les écarte si elles ne font pas baisser le prix — aucune n'est présentée comme garantie. Mettez à jour ce fichier pour enrichir la base sans dépendre d'un tiers.",
+  "shein.com": [
+    { "code": "SHEIN15", "description": "15 % de réduction sur une sélection", "successRate": 0.5 },
+    { "code": "SAVE10", "description": "10 % de réduction nouveaux clients", "successRate": 0.4 }
+  ],
+  "adidas.com": [
+    { "code": "RAN15", "description": "Offre plein tarif", "successRate": 0.4 }
+  ],
+  "asos.com": [
+    { "code": "ASOS20", "description": "20 % étudiants / nouveaux clients", "successRate": 0.5 }
+  ],
+  "zalando.fr": [
+    { "code": "ZALANDO10", "description": "10 % sur la mode (sélection)", "successRate": 0.4 }
+  ],
+  "cdiscount.com": [
+    { "code": "CDAV15", "description": "15 € de remise dès 150 € (adhérents)", "successRate": 0.35 }
+  ],
+  "fnac.com": [
+    { "code": "ADHERENT10", "description": "10 € offerts aux adhérents dès 100 €", "successRate": 0.4 }
+  ],
+  "nike.com": [
+    { "code": "NIKE10", "description": "10 % nouveaux membres", "successRate": 0.4 }
+  ],
+  "decathlon.fr": [
+    { "code": "DECAT5", "description": "5 € offerts dès 50 € (sélection)", "successRate": 0.3 }
+  ]
+}

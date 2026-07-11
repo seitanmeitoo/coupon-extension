@@ -20,5 +20,26 @@
   ],
   "asos.com": [
     { "code": "ASOS20", "description": "20 % étudiants et nouveaux clients", "successRate": 0.55 }
+  ],
+  "cdiscount.com": [
+    { "code": "CDAV15", "description": "15 € de remise dès 150 € (adhérents, exemple)", "successRate": 0.35 }
+  ],
+  "nike.com": [
+    { "code": "NIKE10", "description": "10 % nouveaux membres (exemple)", "successRate": 0.4 }
+  ],
+  "decathlon.fr": [
+    { "code": "DECAT5", "description": "5 € offerts dès 50 € (sélection, exemple)", "successRate": 0.3 }
+  ],
+  "sephora.fr": [
+    { "code": "BEAUTE10", "description": "10 % sur une première commande (exemple)", "successRate": 0.4 }
+  ],
+  "laredoute.fr": [
+    { "code": "REDOUTE15", "description": "15 % sur la sélection (exemple)", "successRate": 0.35 }
+  ],
+  "boulanger.com": [
+    { "code": "BLG20", "description": "20 € de remise dès 200 € (exemple)", "successRate": 0.3 }
+  ],
+  "uniqlo.com": [
+    { "code": "UNIQLO10", "description": "10 % nouveaux clients (exemple)", "successRate": 0.4 }
   ]
 }

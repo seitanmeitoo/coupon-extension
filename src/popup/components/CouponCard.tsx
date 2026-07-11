@@ -1,5 +1,6 @@
 // Carte d'un coupon : code, description, taux de réussite, provenance, actions.
 import { useState } from 'react'
+import { t } from '../../lib/i18n'
 import type { Coupon } from '../../types'
 import SourceBadge from './SourceBadge'
 
@@ -30,7 +31,7 @@ export default function CouponCard({ coupon, onTest }: CouponCardProps) {
         </code>
         {coupon.successRate !== undefined && (
           <span className="shrink-0 text-xs font-medium text-gray-500">
-            {Math.round(coupon.successRate * 100)} % de réussite
+            {t('successRate', { percent: Math.round(coupon.successRate * 100) })}
           </span>
         )}
       </div>
@@ -47,7 +48,7 @@ export default function CouponCard({ coupon, onTest }: CouponCardProps) {
             onClick={() => void copy()}
             className="rounded-lg border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100"
           >
-            {copied ? 'Copié !' : 'Copier'}
+            {copied ? t('copied') : t('copy')}
           </button>
           {onTest !== null && (
             <button
@@ -55,7 +56,7 @@ export default function CouponCard({ coupon, onTest }: CouponCardProps) {
               onClick={() => onTest(coupon.code)}
               className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-indigo-700"
             >
-              Tester ce code
+              {t('testCode')}
             </button>
           )}
         </div>
