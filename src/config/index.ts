@@ -9,11 +9,21 @@
  * embarqué (`src/mocks/coupons.json`) sert de repli hors-ligne.
  */
 export const TIER1_SOURCES: readonly string[] = [
+  // Source PRIMAIRE : flux curé auto-hébergé dans CE dépôt (autonomie totale —
+  // aucune dépendance à un mainteneur tiers). Éditez `data/coupons.json`.
+  'https://raw.githubusercontent.com/seitanmeitoo/coupon-extension/main/data/coupons.json',
+  // Source SECONDAIRE : flux communautaire tiers, en repli.
   'https://raw.githubusercontent.com/fityanos/coupon-feed/main/coupons.json',
 ]
 
 /** Durée de fraîcheur du Tier 1 : au-delà, un re-fetch est tenté à la demande. */
 export const TIER1_TTL_MS = 6 * 60 * 60 * 1000 // 6 heures
+
+/** Nom de l'alarme de rafraîchissement périodique du Tier 1. */
+export const TIER1_REFRESH_ALARM = 'refreshTier1'
+
+/** Période du rafraîchissement automatique du Tier 1 (en minutes). */
+export const TIER1_REFRESH_PERIOD_MIN = 360 // 6 heures
 
 /**
  * Tier 2 — Annuaire public de coupons à scraper en repli.

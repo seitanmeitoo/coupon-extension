@@ -3,14 +3,14 @@
 // (« $1,234.56 », « USD 12.99 »).
 
 /** Séparateurs de milliers possibles : espace, espace insécable (fine ou non). */
-const AMOUNT = String.raw`\d{1,5}(?:[   .,]\d{3})*(?:[.,]\d{2})?`
+const AMOUNT = String.raw`\d{1,5}(?:[   .,'’]\d{3})*(?:[.,]\d{2})?`
 /**
  * Symboles monétaires (non alphabétiques) + codes ISO alphabétiques.
  * Les codes alphabétiques exigent des frontières de mots `\b` et sont
  * SENSIBLES À LA CASSE (pas de drapeau `i`) : sinon « eur » à l'intérieur de
  * « meilleur » ou la prose minuscule seraient pris pour une devise.
  */
-const CURRENCY = String.raw`€|\$|£|\bEUR\b|\bUSD\b|\bGBP\b`
+const CURRENCY = String.raw`€|\$|£|\bEUR\b|\bUSD\b|\bGBP\b|\bCHF\b|\bCAD\b`
 
 /** Prix avec devise après (« 59,99 € ») ou avant (« $12.99 »). Pas de drapeau `i`. */
 const PRICE_RE = new RegExp(
@@ -25,7 +25,7 @@ const PRICE_RE = new RegExp(
  * Retourne `null` si la chaîne n'est pas un montant plausible.
  */
 export function normalizeAmount(raw: string): number | null {
-  const cleaned = raw.replace(/[   ]/g, '')
+  const cleaned = raw.replace(/[   '’]/g, '')
   const match = cleaned.match(/^(\d+(?:[.,]\d{3})*)(?:[.,](\d{2}))?$/)
   if (!match) return null
   const integerPart = match[1].replace(/[.,]/g, '')
@@ -49,6 +49,22 @@ export function findPrices(text: string): number[] {
 /** Le contexte (classe, id, texte voisin) évoque-t-il un TOTAL de commande ? */
 export function isTotalContext(context: string): boolean {
   return /total|à payer|a payer|montant d[ûu]|sous-total|subtotal|grand total|order total|amount due/i.test(
+    context,
+  )
+}
+
+/**
+ * Le contexte évoque-t-il un SOUS-TOTAL ? Ces lignes ne changent PAS quand une
+ * remise s'applique (elles restent au montant hors réduction) : les inclure dans
+ * les candidats « total » masquerait la baisse du vrai total à payer.
+ */
+export function isSubtotalContext(context: string): boolean {
+  return /sous[-\s]?total|subtotal|sub[-\s]?total/i.test(context)
+}
+
+/** Le contexte désigne-t-il le total FINAL à payer (marqueur fort, non ambigu) ? */
+export function isFinalTotalContext(context: string): boolean {
+  return /à payer|a payer|montant d[ûu]|net à payer|grand total|order total|total due|amount due/i.test(
     context,
   )
 }

@@ -5,6 +5,8 @@ import {
   containsFailureMessage,
   containsSuccessMessage,
   findPrices,
+  isFinalTotalContext,
+  isSubtotalContext,
   isTotalContext,
   normalizeAmount,
 } from '../src/content/price'
@@ -59,6 +61,32 @@ describe('findPrices', () => {
 
   it('reconnaît toujours un code devise ISO en majuscules', () => {
     expect(findPrices('USD 12.99')).toEqual([12.99])
+  })
+
+  it('reconnaît les devises ajoutées (CHF, CAD)', () => {
+    expect(findPrices('Total : 89,90 CHF')).toEqual([89.9])
+    expect(findPrices('CAD 45.00')).toEqual([45])
+  })
+
+  it('gère le séparateur de milliers suisse (apostrophe) — régression', () => {
+    expect(findPrices("CHF 1'890.00")).toEqual([1890])
+    expect(findPrices('CHF 1’890.00')).toEqual([1890]) // apostrophe typographique
+    expect(normalizeAmount("1'890.00")).toBe(1890)
+  })
+})
+
+describe('contextes total / sous-total (régression masquage)', () => {
+  it('isSubtotalContext distingue le sous-total du total', () => {
+    expect(isSubtotalContext('Sous-total')).toBe(true)
+    expect(isSubtotalContext('order-subtotal')).toBe(true)
+    expect(isSubtotalContext('Total à payer')).toBe(false)
+  })
+
+  it('isFinalTotalContext ne matche que les marqueurs de total final', () => {
+    expect(isFinalTotalContext('Total à payer')).toBe(true)
+    expect(isFinalTotalContext('Grand total')).toBe(true)
+    expect(isFinalTotalContext('Sous-total')).toBe(false)
+    expect(isFinalTotalContext('Total')).toBe(false)
   })
 })
 

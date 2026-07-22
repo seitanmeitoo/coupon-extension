@@ -8,8 +8,9 @@
 //   - les réponses aux messages sont asynchrones : le listener retourne `true`.
 
 import { reportCouponResult } from '../api/crowdsource'
-import { MOCK_CROWDSOURCE } from '../config'
+import { MOCK_CROWDSOURCE, TIER1_REFRESH_ALARM, TIER1_REFRESH_PERIOD_MIN } from '../config'
 import { normalizeDomain } from '../lib/domain'
+import { runMigrations } from '../lib/migrations'
 import type {
   BgRequest,
   GetCouponsResponse,
@@ -19,12 +20,15 @@ import type {
 } from '../lib/messaging'
 import {
   addCouponsForDomain,
+  addHistoryEntry,
+  addSavings,
   getCouponsForDomain,
   getMeta,
   getSettings,
   getStorage,
   incrementStat,
   markTier2Scraped,
+  purgeExpiredCoupons,
 } from '../lib/storage'
 import type { Coupon } from '../types'
 import { ensureTier1Fresh, refreshTier1 } from './tiers/tier1-community'
@@ -47,6 +51,7 @@ import { scrapeTier2, TIER2_COOLDOWN_MS } from './tiers/tier2-scraper'
 async function handleGetCoupons(
   rawDomain: string,
   couponFieldPresent: boolean,
+  tabId?: number,
 ): Promise<GetCouponsResponse> {
   const domain = normalizeDomain(rawDomain)
 
@@ -72,7 +77,20 @@ async function handleGetCoupons(
     }
   }
 
+  // Badge d'icône : signale le nombre de coupons disponibles sur cet onglet.
+  if (tabId !== undefined) void updateBadge(tabId, coupons.length)
+
   return { coupons }
+}
+
+/** Met à jour la pastille de l'icône pour un onglet (aucune permission requise). */
+async function updateBadge(tabId: number, count: number): Promise<void> {
+  try {
+    await chrome.action.setBadgeText({ tabId, text: count > 0 ? String(count) : '' })
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: '#4f46e5' })
+  } catch {
+    // L'onglet a pu se fermer entre-temps : sans conséquence.
+  }
 }
 
 /**
@@ -97,6 +115,8 @@ async function handleReportResult(request: ReportResultRequest): Promise<ReportR
     }
     await addCouponsForDomain(domain, [coupon])
     await incrementStat('applied')
+    if (typeof request.saved === 'number') await addSavings(request.saved)
+    await addHistoryEntry({ domain, code, saved: request.saved, at: Date.now() })
   }
 
   let shared = false
@@ -139,7 +159,7 @@ function isBgRequest(message: unknown): message is BgRequest {
   )
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!isBgRequest(message)) return false
 
   const respond = (work: Promise<unknown>): true => {
@@ -154,7 +174,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   switch (message.type) {
     case 'GET_COUPONS':
-      return respond(handleGetCoupons(message.domain, message.couponFieldPresent === true))
+      return respond(
+        handleGetCoupons(message.domain, message.couponFieldPresent === true, sender.tab?.id),
+      )
     case 'REPORT_RESULT':
       return respond(handleReportResult(message))
     case 'REFRESH_TIER1':
@@ -186,15 +208,65 @@ function registerDeclarativeContentRule(): void {
   })
 }
 
+/* ------------------------------------------------------------------ */
+/* Rafraîchissement périodique (chrome.alarms)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Crée l'alarme périodique du Tier 1 UNIQUEMENT si elle n'existe pas déjà.
+ * Les alarmes MV3 persistent entre les redémarrages : la recréer sans garde à
+ * chaque onStartup réarmerait son premier tir à « démarrage + période », si bien
+ * qu'un profil dont les sessions durent moins que la période ne verrait JAMAIS
+ * l'alarme se déclencher (donc ni rafraîchissement ni purge). La garde évite ça.
+ */
+async function scheduleRefreshAlarm(): Promise<void> {
+  const existing = await chrome.alarms.get(TIER1_REFRESH_ALARM)
+  if (existing === undefined) {
+    chrome.alarms.create(TIER1_REFRESH_ALARM, { periodInMinutes: TIER1_REFRESH_PERIOD_MIN })
+  }
+}
+
+// Listener enregistré au top-level (obligatoire MV3 pour réveiller le worker).
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== TIER1_REFRESH_ALARM) return
+  void (async () => {
+    try {
+      await refreshTier1()
+      // Hygiène : on profite du réveil pour purger les coupons périmés/en excès.
+      const removed = await purgeExpiredCoupons()
+      if (removed > 0) console.info(`[Worker] ${removed} coupon(s) périmé(s) purgé(s).`)
+    } catch (error) {
+      console.warn('[Worker] Rafraîchissement périodique échoué :', error)
+    }
+  })()
+})
+
 chrome.runtime.onInstalled.addListener(() => {
   registerDeclarativeContentRule()
-  // Premier remplissage du Tier 1 (avec repli sur le flux embarqué) :
-  // l'extension est utilisable immédiatement, même hors-ligne.
-  void refreshTier1()
+  void scheduleRefreshAlarm()
+  void (async () => {
+    // Migrations AVANT tout accès, pour ne pas persister sur un vieux schéma.
+    try {
+      await runMigrations()
+    } catch (error) {
+      console.warn('[Worker] Migration du stockage échouée :', error)
+    }
+    // Premier remplissage du Tier 1 (avec repli sur le flux embarqué) :
+    // l'extension est utilisable immédiatement, même hors-ligne.
+    await refreshTier1()
+  })()
 })
 
 chrome.runtime.onStartup.addListener(() => {
-  void ensureTier1Fresh().catch((error) =>
+  void scheduleRefreshAlarm()
+  void (async () => {
+    try {
+      await runMigrations()
+    } catch (error) {
+      console.warn('[Worker] Migration du stockage échouée :', error)
+    }
+    await ensureTier1Fresh()
+  })().catch((error) =>
     console.warn('[Worker] Vérification de fraîcheur au démarrage échouée :', error),
   )
 })

@@ -133,4 +133,31 @@ describe('findApplyButton', () => {
     const input = findCouponInput()!
     expect(findApplyButton(input)).toBeNull()
   })
+
+  it('rejette un bouton de plateforme ÉLOIGNÉ du champ (garde de proximité)', () => {
+    // WooCommerce : le sélecteur plateforme est button[name="apply_coupon"], mais
+    // ici ce bouton est dans l'en-tête, loin du champ → doit être ignoré.
+    document.body.className = 'woocommerce'
+    document.body.innerHTML = `
+      <header><button name="apply_coupon" type="button">Rechercher</button></header>
+      <main><section><div><form>
+        <input type="text" id="coupon_code" name="coupon_code" />
+      </form></div></section></main>
+    `
+    const input = document.getElementById('coupon_code') as HTMLInputElement
+    // Aucun bouton proche → l'heuristique bornée ne trouve rien non plus.
+    expect(findApplyButton(input)).toBeNull()
+  })
+
+  it('accepte un bouton de plateforme PROCHE du champ', () => {
+    document.body.className = 'woocommerce'
+    document.body.innerHTML = `
+      <form class="coupon">
+        <input type="text" id="coupon_code" name="coupon_code" />
+        <button name="apply_coupon" type="button">Appliquer</button>
+      </form>
+    `
+    const input = document.getElementById('coupon_code') as HTMLInputElement
+    expect(findApplyButton(input)?.getAttribute('name')).toBe('apply_coupon')
+  })
 })

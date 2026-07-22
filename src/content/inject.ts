@@ -33,7 +33,7 @@ const state = {
  */
 function liveInput(): HTMLInputElement | null {
   if (state.input !== null && state.input.isConnected) return state.input
-  const fresh = findCouponInput()
+  const fresh = findCouponInput(document, domain)
   if (fresh !== null) {
     state.input = fresh
     attachManualListeners(fresh)
@@ -46,6 +46,11 @@ function liveInput(): HTMLInputElement | null {
 /* ------------------------------------------------------------------ */
 /* Petit toast en français, sans dépendance                            */
 /* ------------------------------------------------------------------ */
+
+/** Formate un montant économisé (devise inconnue côté page → format neutre FR). */
+function formatAmount(amount: number): string {
+  return amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
 
 function showToast(message: string): void {
   const toast = document.createElement('div')
@@ -81,14 +86,14 @@ async function tryCodesAutomatically(coupons: Coupon[]): Promise<void> {
   if (input === null || coupons.length === 0 || state.autoTried) return
   state.autoTried = true
 
-  const button = findApplyButton(input)
+  const button = findApplyButton(input, domain)
   for (const coupon of [...coupons].sort(byPromise)) {
     // L'observation démarre AVANT le clic : les pages qui recalculent leur
     // total de façon synchrone seraient sinon jugées « sans verdict ».
     const watch = startOutcomeWatch()
     applyCode(input, button, coupon.code)
     state.manuallyTyped = false // la valeur en place vient de nous, pas de l'utilisateur
-    const outcome = await watch.result
+    const { outcome, saved } = await watch.result
 
     if (outcome === 'success') {
       state.reportedCodes.add(coupon.code)
@@ -98,8 +103,13 @@ async function tryCodesAutomatically(coupons: Coupon[]): Promise<void> {
         code: coupon.code,
         success: true,
         manual: false,
+        saved: saved ?? undefined,
       })
-      showToast(`✓ Code « ${coupon.code} » appliqué — le prix a baissé !`)
+      showToast(
+        saved !== null
+          ? `✓ Code « ${coupon.code} » appliqué — le prix a baissé de ${formatAmount(saved)} !`
+          : `✓ Code « ${coupon.code} » appliqué — le prix a baissé !`,
+      )
       return
     }
   }
@@ -139,7 +149,7 @@ function armManualWatch(code: string): void {
   const watch = startOutcomeWatch({ windowMs: 15000 })
   state.manualWatch = { code, watch }
 
-  void watch.result.then(async (outcome) => {
+  void watch.result.then(async ({ outcome, saved }) => {
     // Une surveillance annulée (remplacée) résout en 'timeout' : on l'ignore.
     if (state.manualWatch?.watch !== watch) return
     state.manualWatch = null
@@ -155,6 +165,7 @@ function armManualWatch(code: string): void {
       code,
       success: true,
       manual: true,
+      saved: saved ?? undefined,
     })
     if (response?.shared && response.simulated) {
       // Mode démonstration : le pipeline Tier 3 a tourné mais rien n'a été envoyé.
@@ -198,7 +209,7 @@ function onSubmitGesture(event: Event): void {
 const wired = new WeakSet<HTMLInputElement>()
 
 function attachManualListeners(input: HTMLInputElement): void {
-  applyButtonRef = findApplyButton(input)
+  applyButtonRef = findApplyButton(input, domain)
   // Conteneur coupon (jamais le <form> entier, souvent global) pour borner les clics.
   couponScope =
     input.closest<HTMLElement>(
@@ -238,9 +249,9 @@ chrome.runtime.onMessage.addListener((message: ContentCommand, _sender, sendResp
   }
 
   const watch = startOutcomeWatch()
-  applyCode(input, findApplyButton(input), message.code)
+  applyCode(input, findApplyButton(input, domain), message.code)
   state.manuallyTyped = false
-  void watch.result.then((outcome) => {
+  void watch.result.then(({ outcome, saved }) => {
     if (outcome === 'success') {
       void sendToBackground({
         type: 'REPORT_RESULT',
@@ -248,8 +259,13 @@ chrome.runtime.onMessage.addListener((message: ContentCommand, _sender, sendResp
         code: message.code,
         success: true,
         manual: false,
+        saved: saved ?? undefined,
       })
-      showToast(`✓ Code « ${message.code} » appliqué — le prix a baissé !`)
+      showToast(
+        saved !== null
+          ? `✓ Code « ${message.code} » appliqué — le prix a baissé de ${formatAmount(saved)} !`
+          : `✓ Code « ${message.code} » appliqué — le prix a baissé !`,
+      )
     } else if (outcome === 'failure') {
       showToast(`✗ Code « ${message.code} » refusé par la boutique.`)
     }
@@ -286,7 +302,7 @@ async function onInputFound(input: HTMLInputElement): Promise<void> {
 }
 
 function startDetection(): void {
-  const immediate = findCouponInput()
+  const immediate = findCouponInput(document, domain)
   if (immediate !== null) {
     void onInputFound(immediate)
     return
@@ -299,7 +315,7 @@ function startDetection(): void {
 
   const attempt = (): void => {
     lastAttempt = Date.now()
-    const input = findCouponInput()
+    const input = findCouponInput(document, domain)
     if (input !== null) {
       rescanner.disconnect()
       clearInterval(guaranteed)

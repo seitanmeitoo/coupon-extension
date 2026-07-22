@@ -1,14 +1,16 @@
-// Composant racine du popup : onglets « Coupons » / « Réglages ».
+// Composant racine du popup : onglets « Coupons » / « Historique » / « Réglages ».
 import { useCallback, useEffect, useState } from 'react'
 import { domainFromUrl } from '../lib/domain'
+import { t } from '../lib/i18n'
 import { sendToBackground, sendToTab } from '../lib/messaging'
-import { getSettings, getStats, setSettings as persistSettings } from '../lib/storage'
-import type { Coupon, Settings, Stats } from '../types'
+import { getHistory, getSettings, getStats, setSettings as persistSettings } from '../lib/storage'
+import type { Coupon, HistoryEntry, Settings, Stats } from '../types'
 import CouponList from './components/CouponList'
 import Header from './components/Header'
+import HistoryTab from './components/HistoryTab'
 import SettingsTab from './components/SettingsTab'
 
-type Tab = 'coupons' | 'settings'
+type Tab = 'coupons' | 'history' | 'settings'
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('coupons')
@@ -16,21 +18,27 @@ export default function App() {
   const [tabId, setTabId] = useState<number | null>(null)
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [settings, setSettings] = useState<Settings>({ crowdsourceOptIn: false })
-  const [stats, setStats] = useState<Stats>({ applied: 0, shared: 0 })
+  const [stats, setStats] = useState<Stats>({ applied: 0, shared: 0, savedTotal: 0 })
+  const [history, setHistory] = useState<HistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
-  /** Charge domaine actif, coupons, réglages et statistiques. */
+  /** Charge domaine actif, coupons, réglages, statistiques et historique. */
   const loadEverything = useCallback(async (): Promise<void> => {
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
     const activeDomain = activeTab?.url !== undefined ? domainFromUrl(activeTab.url) : null
     setDomain(activeDomain)
     setTabId(activeTab?.id ?? null)
 
-    const [loadedSettings, loadedStats] = await Promise.all([getSettings(), getStats()])
+    const [loadedSettings, loadedStats, loadedHistory] = await Promise.all([
+      getSettings(),
+      getStats(),
+      getHistory(),
+    ])
     setSettings(loadedSettings)
     setStats(loadedStats)
+    setHistory(loadedHistory)
 
     if (activeDomain !== null) {
       const { coupons: found } = await sendToBackground({
@@ -45,7 +53,7 @@ export default function App() {
     loadEverything()
       .catch((error) => {
         console.error('[Popup] Chargement impossible :', error)
-        setNotice('Impossible de contacter le service worker de l’extension.')
+        setNotice(t('noticeWorkerError'))
       })
       .finally(() => setLoading(false))
   }, [loadEverything])
@@ -57,13 +65,9 @@ export default function App() {
     try {
       const result = await sendToBackground({ type: 'REFRESH_TIER1' })
       await loadEverything()
-      setNotice(
-        result.ok
-          ? `Base communautaire actualisée (${result.domains} boutiques couvertes).`
-          : 'Actualisation partielle : le flux distant est resté injoignable.',
-      )
+      setNotice(result.ok ? t('noticeTier1Refreshed', { domains: result.domains }) : t('noticeTier1Partial'))
     } catch {
-      setNotice('Actualisation impossible pour le moment.')
+      setNotice(t('noticeRefreshFailed'))
     } finally {
       setRefreshing(false)
     }
@@ -75,13 +79,9 @@ export default function App() {
     setNotice(null)
     try {
       const response = await sendToTab(tabId, { type: 'APPLY_CODE', code })
-      setNotice(
-        response.started
-          ? `Essai du code « ${code} » lancé sur la page…`
-          : 'Aucun champ « code promo » détecté sur cette page.',
-      )
+      setNotice(response.started ? t('noticeTestStarted', { code }) : t('noticeTestNoField'))
     } catch {
-      setNotice('Cette page ne permet pas l’essai automatique (rechargez-la et réessayez).')
+      setNotice(t('noticeTestUnavailable'))
     }
   }
 
@@ -99,10 +99,11 @@ export default function App() {
       <nav className="flex border-b border-gray-200 bg-white text-sm font-medium">
         {(
           [
-            ['coupons', 'Coupons'],
-            ['settings', 'Réglages'],
+            ['coupons', 'tabCoupons'],
+            ['history', 'tabHistory'],
+            ['settings', 'tabSettings'],
           ] as const
-        ).map(([key, label]) => (
+        ).map(([key, labelKey]) => (
           <button
             key={key}
             type="button"
@@ -113,7 +114,7 @@ export default function App() {
                 : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
           >
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </nav>
@@ -123,16 +124,14 @@ export default function App() {
           <p className="mb-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">{notice}</p>
         )}
 
-        {tab === 'coupons' ? (
-          loading ? (
-            <p className="py-10 text-center text-sm text-gray-500">Recherche de coupons…</p>
+        {tab === 'coupons' &&
+          (loading ? (
+            <p className="py-10 text-center text-sm text-gray-500">{t('searching')}</p>
           ) : (
             <>
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-xs text-gray-500">
-                  {coupons.length > 0
-                    ? `${coupons.length} code(s) pour ce site`
-                    : 'Rien en stock pour ce site'}
+                  {coupons.length > 0 ? t('couponsForSite', { count: coupons.length }) : t('couponsNone')}
                 </p>
                 <button
                   type="button"
@@ -140,7 +139,7 @@ export default function App() {
                   disabled={refreshing}
                   className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50"
                 >
-                  {refreshing ? 'Actualisation…' : '↻ Actualiser'}
+                  {refreshing ? t('refreshing') : t('refresh')}
                 </button>
               </div>
               <CouponList
@@ -149,14 +148,17 @@ export default function App() {
                 onTest={tabId !== null && domain !== null ? (code) => void testCode(code) : null}
               />
             </>
-          )
-        ) : (
+          ))}
+
+        {tab === 'history' && <HistoryTab history={history} />}
+
+        {tab === 'settings' && (
           <SettingsTab settings={settings} stats={stats} onOptInChange={changeOptIn} />
         )}
       </main>
 
       <footer className="border-t border-gray-200 bg-white px-4 py-2 text-center text-[10px] text-gray-400">
-        Vie privée d'abord : aucun identifiant ne quitte votre navigateur.
+        {t('footerPrivacy')}
       </footer>
     </div>
   )

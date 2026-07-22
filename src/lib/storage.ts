@@ -3,14 +3,22 @@
 // ne vit en variable de module ; tout passe par ces helpers.
 
 import { TIER1_TTL_MS } from '../config'
-import type { Coupon, Settings, Stats, StorageSchema } from '../types'
+import { CURRENT_SCHEMA_VERSION, type Coupon, type HistoryEntry, type Settings, type Stats, type StorageSchema } from '../types'
+
+/** Taille maximale de l'historique local (récent en tête). */
+export const HISTORY_MAX = 50
+
+/** Nombre maximal de coupons conservés par domaine (purge LRU par ancienneté). */
+export const MAX_COUPONS_PER_DOMAIN = 30
 
 /** Valeurs par défaut du stockage — vie privée d'abord : opt-in désactivé. */
 export const STORAGE_DEFAULTS: StorageSchema = {
+  schemaVersion: CURRENT_SCHEMA_VERSION,
   coupons: {},
   meta: { tier1LastFetch: 0, tier2LastScrape: {} },
   settings: { crowdsourceOptIn: false },
-  stats: { applied: 0, shared: 0 },
+  stats: { applied: 0, shared: 0, savedTotal: 0 },
+  history: [],
 }
 
 /** Lit l'intégralité du stockage en appliquant les valeurs par défaut. */
@@ -142,10 +150,67 @@ export async function getStats(): Promise<Stats> {
   return stats
 }
 
-/** Incrémente un compteur local (jamais transmis à l'extérieur). */
-export function incrementStat(key: keyof Stats): Promise<void> {
+/** Incrémente un compteur entier local (jamais transmis à l'extérieur). */
+export function incrementStat(key: 'applied' | 'shared'): Promise<void> {
   return withWriteLock(async () => {
     const { stats } = await getStorage()
     await chrome.storage.local.set({ stats: { ...stats, [key]: stats[key] + 1 } })
   })
+}
+
+/** Ajoute un montant au total économisé cumulé (local uniquement). */
+export function addSavings(amount: number): Promise<void> {
+  if (!Number.isFinite(amount) || amount <= 0) return Promise.resolve()
+  return withWriteLock(async () => {
+    const { stats } = await getStorage()
+    await chrome.storage.local.set({
+      stats: { ...stats, savedTotal: Math.round((stats.savedTotal + amount) * 100) / 100 },
+    })
+  })
+}
+
+/** Lit l'historique local des codes appliqués (récent en tête). */
+export async function getHistory(): Promise<HistoryEntry[]> {
+  const { history } = await getStorage()
+  return history
+}
+
+/** Ajoute une entrée d'historique en tête et borne la liste à HISTORY_MAX. */
+export function addHistoryEntry(entry: HistoryEntry): Promise<void> {
+  return withWriteLock(async () => {
+    const { history } = await getStorage()
+    const next = [entry, ...history].slice(0, HISTORY_MAX)
+    await chrome.storage.local.set({ history: next })
+  })
+}
+
+/**
+ * Retire les coupons périmés (`expiresAt` dépassé) et borne chaque domaine à
+ * MAX_COUPONS_PER_DOMAIN (LRU : on garde les plus récemment ajoutés).
+ * Retourne le nombre total de coupons supprimés. Fonction PURE d'aide testable
+ * séparée (`pruneCoupons`) pour la logique de tri/filtre.
+ */
+export function purgeExpiredCoupons(now = Date.now()): Promise<number> {
+  return withWriteLock(async () => {
+    const { coupons } = await getStorage()
+    let removed = 0
+    const next: Record<string, Coupon[]> = {}
+    for (const [domain, list] of Object.entries(coupons)) {
+      const pruned = pruneCoupons(list, now)
+      removed += list.length - pruned.length
+      if (pruned.length > 0) next[domain] = pruned
+    }
+    if (removed > 0) await chrome.storage.local.set({ coupons: next })
+    return removed
+  })
+}
+
+/**
+ * Filtre PUR (testable) : retire les coupons périmés puis borne la liste aux
+ * MAX_COUPONS_PER_DOMAIN plus récents (par `addedAt` décroissant).
+ */
+export function pruneCoupons(list: Coupon[], now = Date.now()): Coupon[] {
+  const alive = list.filter((c) => c.expiresAt === undefined || c.expiresAt > now)
+  if (alive.length <= MAX_COUPONS_PER_DOMAIN) return alive
+  return [...alive].sort((a, b) => b.addedAt - a.addedAt).slice(0, MAX_COUPONS_PER_DOMAIN)
 }

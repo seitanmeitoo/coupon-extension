@@ -31,10 +31,17 @@ const chromeMock = {
 
 const {
   addCouponsForDomain,
+  addHistoryEntry,
+  addSavings,
   getCouponsForDomain,
   getSettings,
+  getStats,
+  HISTORY_MAX,
   incrementStat,
+  MAX_COUPONS_PER_DOMAIN,
   mergeCoupons,
+  pruneCoupons,
+  purgeExpiredCoupons,
   replaceCommunityCoupons,
   setSettings,
 } = await import('../src/lib/storage')
@@ -142,6 +149,63 @@ describe('incrementStat', () => {
     await incrementStat('applied')
     await incrementStat('applied')
     await incrementStat('shared')
-    expect(store.stats).toEqual({ applied: 2, shared: 1 })
+    expect(store.stats).toEqual({ applied: 2, shared: 1, savedTotal: 0 })
+  })
+})
+
+describe('addSavings', () => {
+  it('accumule les montants économisés (arrondi au centime)', async () => {
+    await addSavings(5.5)
+    await addSavings(4.25)
+    expect((store.stats as { savedTotal: number }).savedTotal).toBe(9.75)
+  })
+
+  it('ignore les montants non finis ou négatifs', async () => {
+    await addSavings(-3)
+    await addSavings(Number.NaN)
+    expect((await getStats()).savedTotal).toBe(0)
+  })
+})
+
+describe('addHistoryEntry', () => {
+  it('ajoute en tête et borne la liste à HISTORY_MAX', async () => {
+    for (let i = 0; i < HISTORY_MAX + 5; i++) {
+      await addHistoryEntry({ domain: 'x.fr', code: `C${i}`, at: i })
+    }
+    const history = store.history as Array<{ code: string }>
+    expect(history).toHaveLength(HISTORY_MAX)
+    expect(history[0].code).toBe(`C${HISTORY_MAX + 4}`) // le plus récent en tête
+  })
+})
+
+describe('pruneCoupons (pur)', () => {
+  it('retire les coupons périmés', () => {
+    const list = [
+      coupon('VALIDE', 'community', { expiresAt: 2000 }),
+      coupon('PERIME', 'community', { expiresAt: 500 }),
+      coupon('SANS_EXP', 'community'),
+    ]
+    const kept = pruneCoupons(list, 1000).map((c) => c.code)
+    expect(kept).toEqual(['VALIDE', 'SANS_EXP'])
+  })
+
+  it('borne au plus MAX_COUPONS_PER_DOMAIN en gardant les plus récents', () => {
+    const list = Array.from({ length: MAX_COUPONS_PER_DOMAIN + 10 }, (_, i) =>
+      coupon(`C${i}`, 'scraped', { addedAt: i }),
+    )
+    const kept = pruneCoupons(list, 0)
+    expect(kept).toHaveLength(MAX_COUPONS_PER_DOMAIN)
+    // Les addedAt les plus élevés (récents) sont conservés.
+    expect(Math.min(...kept.map((c) => c.addedAt))).toBe(10)
+  })
+})
+
+describe('purgeExpiredCoupons', () => {
+  it('supprime les coupons périmés et retire les domaines vidés', async () => {
+    await addCouponsForDomain('a.fr', [coupon('OLD', 'community', { expiresAt: 100 })])
+    await addCouponsForDomain('b.fr', [coupon('KEEP', 'community', { expiresAt: 9999 })])
+    const removed = await purgeExpiredCoupons(1000)
+    expect(removed).toBe(1)
+    expect(store.coupons).toEqual({ 'b.fr': [expect.objectContaining({ code: 'KEEP' })] })
   })
 })

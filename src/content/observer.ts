@@ -2,7 +2,14 @@
 // qui tranche entre succès (baisse de prix, message positif) et échec
 // (message « code invalide »).
 
-import { containsFailureMessage, containsSuccessMessage, findPrices, isTotalContext } from './price'
+import {
+  containsFailureMessage,
+  containsSuccessMessage,
+  findPrices,
+  isFinalTotalContext,
+  isSubtotalContext,
+  isTotalContext,
+} from './price'
 
 export type Outcome = 'success' | 'failure' | 'timeout'
 
@@ -27,13 +34,21 @@ function contextOf(node: Node): string {
 
 /**
  * Photographie les prix de la page : parcourt les nœuds texte porteurs de
- * devise et retient le « total » le plus plausible.
+ * devise et retient le « total à payer » le plus plausible.
+ *
+ * Deux pièges évités :
+ * - Les lignes SOUS-TOTAL matchent « total » mais ne bougent pas avec la remise :
+ *   on les EXCLUT des candidats total (sinon elles masqueraient la baisse).
+ * - Une page peut avoir plusieurs lignes « total » : on préfère un marqueur de
+ *   total FINAL (« à payer », « grand total »…) ; à défaut on retient la DERNIÈRE
+ *   ligne total rencontrée (ordre DOM ≈ total final en bas), pas le maximum.
  */
 export function snapshotPrices(root: Node = document.body): PriceSnapshot {
   const doc = root.ownerDocument ?? document
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   let maxPrice: number | null = null
   let total: number | null = null
+  let finalTotal: number | null = null
 
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     const text = node.textContent ?? ''
@@ -42,12 +57,16 @@ export function snapshotPrices(root: Node = document.body): PriceSnapshot {
     if (prices.length === 0) continue
     const localMax = Math.max(...prices)
     if (maxPrice === null || localMax > maxPrice) maxPrice = localMax
-    // La ligne parle-t-elle d'un total ? (texte du nœud ou contexte ancêtre)
-    if (isTotalContext(text) || isTotalContext(contextOf(node))) {
-      if (total === null || localMax > total) total = localMax
+
+    const ctx = `${text} ${contextOf(node)}`
+    if (isSubtotalContext(ctx)) continue // jamais un « total à payer »
+    if (isFinalTotalContext(ctx)) {
+      finalTotal = localMax // marqueur fort : la dernière occurrence gagne
+    } else if (isTotalContext(ctx)) {
+      total = localMax // total générique : la dernière occurrence gagne
     }
   }
-  return { total, maxPrice }
+  return { total: finalTotal ?? total, maxPrice }
 }
 
 /** Une baisse est significative au-delà d'un demi-centime (bruit d'arrondi). */
@@ -61,6 +80,24 @@ export function priceDropped(before: PriceSnapshot, after: PriceSnapshot): boole
   return hasDropped(before.maxPrice, after.maxPrice)
 }
 
+/**
+ * Montant économisé entre deux photographies (positif), ou `null` si non mesurable.
+ * Utilise le total quand il est identifié, sinon le prix max.
+ */
+export function savingsFrom(before: PriceSnapshot, after: PriceSnapshot): number | null {
+  const b = before.total ?? before.maxPrice
+  const a = after.total ?? after.maxPrice
+  if (b === null || a === null || a >= b) return null
+  return Math.round((b - a) * 100) / 100
+}
+
+/** Verdict enrichi du montant économisé estimé. */
+export interface OutcomeResult {
+  outcome: Outcome
+  /** Montant économisé si mesurable (baisse de prix constatée), sinon null. */
+  saved: number | null
+}
+
 export interface WatchOptions {
   /** Durée maximale d'observation (défaut : 6 s). */
   windowMs?: number
@@ -71,8 +108,8 @@ export interface WatchOptions {
 }
 
 export interface OutcomeWatch {
-  /** Résout avec le verdict : succès, échec ou fenêtre écoulée. */
-  result: Promise<Outcome>
+  /** Résout avec le verdict et le montant économisé estimé. */
+  result: Promise<OutcomeResult>
   /** Interrompt l'observation immédiatement (résout en 'timeout'). */
   cancel: () => void
 }
@@ -100,22 +137,22 @@ export function startOutcomeWatch(options: WatchOptions = {}): OutcomeWatch {
   // (ex. un nouveau geste de soumission remplace le code en cours d'observation).
   let cancel = (): void => {}
 
-  const result = new Promise<Outcome>((resolve) => {
+  const result = new Promise<OutcomeResult>((resolve) => {
     let debounceTimer: ReturnType<typeof setTimeout> | undefined
 
-    const finish = (outcome: Outcome): void => {
+    const finish = (outcome: Outcome, saved: number | null = null): void => {
       clearTimeout(debounceTimer)
       clearTimeout(deadlineTimer)
       clearInterval(checkTimer)
       observer.disconnect()
-      resolve(outcome)
+      resolve({ outcome, saved })
     }
 
     cancel = () => finish('timeout')
 
     const evaluate = (): void => {
       const after = snapshotPrices()
-      if (priceDropped(before, after)) finish('success')
+      if (priceDropped(before, after)) finish('success', savingsFrom(before, after))
     }
 
     const observer = new MutationObserver((mutations) => {
@@ -127,7 +164,8 @@ export function startOutcomeWatch(options: WatchOptions = {}): OutcomeWatch {
             return
           }
           if (containsSuccessMessage(text)) {
-            finish('success')
+            // Succès annoncé par message : le montant peut ne pas être mesurable.
+            finish('success', savingsFrom(before, snapshotPrices()))
             return
           }
         }
@@ -156,7 +194,7 @@ export function startOutcomeWatch(options: WatchOptions = {}): OutcomeWatch {
       // Dernière chance avant le verdict « timeout ».
       const after = snapshotPrices()
       if (priceDropped(before, after)) {
-        finish('success')
+        finish('success', savingsFrom(before, after))
         return
       }
       finish('timeout')

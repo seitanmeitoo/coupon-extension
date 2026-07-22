@@ -4,7 +4,8 @@
 //   2. popup React en français + activation de l'opt-in de partage ;
 //   3. application AUTOMATIQUE d'un code connu (baisse de prix détectée) ;
 //   4. saisie MANUELLE d'un code inconnu → partage anonyme (Tier 3, mode mock) ;
-//   5. régression : le nettoyage du champ ne soumet jamais le <form> englobant.
+//   5. régression : le nettoyage du champ ne soumet jamais le <form> englobant ;
+//   6. économies cumulées, historique, badge d'icône et rendu i18n (_locales).
 //
 // Prérequis : `npm run build`. Lancement : `npm run smoke`.
 
@@ -33,7 +34,7 @@ function check(condition, label) {
 /* 1. Vérifications statiques du build                                  */
 /* ------------------------------------------------------------------ */
 
-console.log('\n[1/5] Artefacts du build')
+console.log('\n[1/6] Artefacts du build')
 for (const artefact of ['manifest.json', 'index.html', 'worker.js', 'content.js']) {
   check(existsSync(join(DIST, artefact)), `dist/${artefact} présent`)
 }
@@ -47,11 +48,13 @@ check(!/^\s*import\s/m.test(contentJs), 'content.js sans import ES top-level')
 const manifest = JSON.parse(readFileSync(join(DIST, 'manifest.json'), 'utf8'))
 check(manifest.manifest_version === 3, 'manifest_version 3')
 check(
-  ['storage', 'activeTab', 'declarativeContent', 'scripting'].every((p) =>
+  ['storage', 'activeTab', 'declarativeContent', 'scripting', 'alarms'].every((p) =>
     manifest.permissions.includes(p),
   ),
-  'permissions demandées par le cahier des charges',
+  'permissions attendues (dont alarms) présentes',
 )
+check(manifest.default_locale === 'fr', 'default_locale = fr (i18n)')
+check(existsSync(join(DIST, '_locales', 'fr', 'messages.json')), 'catalogue _locales/fr présent')
 
 /* ------------------------------------------------------------------ */
 /* Serveur local pour la boutique de démonstration                      */
@@ -92,7 +95,7 @@ try {
   console.log(`\nExtension chargée : ${extensionId}`)
 
   /* ---------------- 2. Popup en français + opt-in ------------------ */
-  console.log('\n[2/5] Popup (français) et opt-in de partage')
+  console.log('\n[2/6] Popup (français) et opt-in de partage')
   const popup = await context.newPage()
   await popup.goto(`chrome-extension://${extensionId}/index.html`)
   await popup.waitForSelector('text=Chasseur de Coupons', { timeout: 10000 })
@@ -116,7 +119,7 @@ try {
   check(settings.settings?.crowdsourceOptIn === true, 'opt-in persisté dans chrome.storage.local')
 
   /* ---------------- 3. Application automatique --------------------- */
-  console.log('\n[3/5] Application automatique d’un code connu')
+  console.log('\n[3/6] Application automatique d’un code connu')
   const shop = await context.newPage()
   shop.on('console', (msg) => {
     if (msg.text().includes('[Coupons]')) console.log(`    (page) ${msg.text()}`)
@@ -132,7 +135,7 @@ try {
   check(bodyText.includes('appliqué'), 'toast de succès en français')
 
   /* ---------------- 4. Saisie manuelle → Tier 3 -------------------- */
-  console.log('\n[4/5] Saisie manuelle → crowdsourcing anonyme (mode mock)')
+  console.log('\n[4/6] Saisie manuelle → crowdsourcing anonyme (mode mock)')
   const manual = await context.newPage()
   await manual.goto(`${SHOP}?valid=MANUEL5`)
   // Les codes connus échouent d'abord (BIENVENUE10 puis SOLDES2026).
@@ -168,7 +171,7 @@ try {
   )
 
   /* -------- 5. Régression : nettoyage ne soumet pas le <form> ------- */
-  console.log('\n[5/5] Régression : le nettoyage ne soumet jamais le formulaire')
+  console.log('\n[5/6] Régression : le nettoyage ne soumet jamais le formulaire')
   const formed = await context.newPage()
   // valid=RIEN : aucun code connu ne marche → applyCleanup est appelé, avec le
   // champ à l'intérieur d'un <form>. Le formulaire ne doit PAS être soumis.
@@ -184,6 +187,43 @@ try {
     () => document.getElementById('code-promo')?.value === '',
   )
   check(champVide, 'le champ coupon a bien été vidé après les essais infructueux')
+
+  /* -------- 6. Économies, historique, badge d'icône, i18n ---------- */
+  console.log('\n[6/6] Économies cumulées, historique, badge et i18n')
+
+  // Économies : chaque application (59,99 → 53,99) économise ~6,00.
+  const store2 = await popup.evaluate(() => chrome.storage.local.get(['stats', 'history']))
+  check((store2.stats?.savedTotal ?? 0) >= 6, `montant économisé cumulé mesuré (${store2.stats?.savedTotal})`)
+
+  // Historique : les codes appliqués sont mémorisés localement.
+  const history = store2.history ?? []
+  check(
+    history.some((h) => h.code === 'MANUEL5') && history.some((h) => h.code === 'BIENVENUE10'),
+    'historique local contient les codes appliqués',
+  )
+
+  // Onglet « Historique » du popup (libellé issu de _locales → i18n en action).
+  await popup.reload()
+  await popup.waitForSelector('text=Historique', { timeout: 10000 })
+  await popup.click('text=Historique')
+  await popup.waitForFunction(() => document.body.innerText.includes('MANUEL5'), { timeout: 10000 })
+  check(true, 'onglet « Historique » affiche un code appliqué (i18n rendu)')
+
+  // Badge d'icône : le badge est posé par tabId (issu du content script, sans
+  // permission « tabs »). On ne peut pas filtrer par URL ici — l'extension n'a
+  // pas d'accès hôte à http://localhost (host_permissions = https://*/*), donc
+  // tab.url est masqué — mais le badge, lui, est bien posé. On cherche donc un
+  // badge non vide sur n'importe quel onglet de paiement ouvert.
+  const badge = await worker.evaluate(async () => {
+    const tabs = await chrome.tabs.query({})
+    for (const tab of tabs) {
+      if (tab.id === undefined) continue
+      const text = await chrome.action.getBadgeText({ tabId: tab.id })
+      if (text) return text
+    }
+    return ''
+  })
+  check(badge !== '', `badge d'icône présent sur un onglet de paiement (« ${badge} »)`)
 } finally {
   await context.close()
   server.close()

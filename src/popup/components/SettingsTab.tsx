@@ -1,5 +1,6 @@
 // Onglet « Réglages » — le cœur de la promesse « vie privée d'abord » :
 // le partage communautaire est un OPT-IN explicite, désactivé par défaut.
+import { t } from '../../lib/i18n'
 import type { Settings, Stats } from '../../types'
 import Toggle from './Toggle'
 
@@ -16,12 +17,9 @@ export default function SettingsTab({ settings, stats, onOptInChange }: Settings
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 id="optin-label" className="text-sm font-semibold text-gray-800">
-              Partage communautaire anonyme
+              {t('settingsShareTitle')}
             </h2>
-            <p className="mt-1 text-xs text-gray-500">
-              Quand un code que vous avez tapé vous-même fait baisser le prix, il est proposé à la
-              communauté — de façon strictement anonyme.
-            </p>
+            <p className="mt-1 text-xs text-gray-500">{t('settingsShareDesc')}</p>
           </div>
           <Toggle
             checked={settings.crowdsourceOptIn}
@@ -34,7 +32,7 @@ export default function SettingsTab({ settings, stats, onOptInChange }: Settings
             settings.crowdsourceOptIn ? 'text-emerald-600' : 'text-gray-400'
           }`}
         >
-          {settings.crowdsourceOptIn ? 'Partage activé — merci pour la communauté !' : 'Partage désactivé (par défaut).'}
+          {settings.crowdsourceOptIn ? t('settingsShareOn') : t('settingsShareOff')}
         </p>
       </section>
 
@@ -58,14 +56,20 @@ export default function SettingsTab({ settings, stats, onOptInChange }: Settings
         </ul>
       </section>
 
-      <section className="grid grid-cols-2 gap-2">
+      <section className="grid grid-cols-3 gap-2">
         <div className="rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm">
           <p className="text-lg font-bold text-gray-900">{stats.applied}</p>
-          <p className="text-[11px] text-gray-500">codes appliqués avec succès</p>
+          <p className="text-[11px] text-gray-500">{t('statApplied')}</p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-center shadow-sm">
+          <p className="text-lg font-bold text-emerald-700">
+            {stats.savedTotal.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-[11px] text-emerald-700">{t('statSaved')}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm">
           <p className="text-lg font-bold text-gray-900">{stats.shared}</p>
-          <p className="text-[11px] text-gray-500">codes partagés anonymement</p>
+          <p className="text-[11px] text-gray-500">{t('statShared')}</p>
         </div>
       </section>
     </div>
