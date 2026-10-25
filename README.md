@@ -2,6 +2,10 @@
 
 Extension de navigateur (**Manifest V3**) qui trouve et applique automatiquement des codes promo au moment du paiement — une alternative respectueuse de la vie privée aux applications type Honey. Construite en **React + TypeScript + Tailwind CSS**, compilée avec **Vite**.
 
+> **Projet archivé — usage personnel / expérimental.** Ce projet a été entièrement « vibe coded » et n'a pas été complètement vérifié. Le code est partagé tel quel, sans garantie de fonctionnement, de sécurité ou de compatibilité. Il n'est plus maintenu activement.
+
+Le projet est distribué sous licence **MIT**. Voir [`LICENSE`](LICENSE).
+
 ## Architecture hybride à 3 niveaux
 
 Le moteur de sourcing des coupons interroge trois sources, de la plus fiable à la plus opportuniste :

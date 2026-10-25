@@ -2,6 +2,7 @@
   "name": "coupon-extension",
   "private": true,
   "version": "1.0.0",
+  "license": "MIT",
   "description": "Extension Chrome (Manifest V3) de recherche et d'application automatique de codes promo — architecture hybride à 3 niveaux, respectueuse de la vie privée.",
   "type": "module",
   "scripts": {
